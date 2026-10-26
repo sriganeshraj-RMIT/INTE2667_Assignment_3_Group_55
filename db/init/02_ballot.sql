@@ -12,13 +12,4 @@ CREATE TABLE ballots (
   chain_head      CHAR(64)
 );
 
-CREATE TABLE audit_log (
-  id          BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  event       VARCHAR(100)  NOT NULL,
-  actor_id    CHAR(36),
-  details     JSON,
-  prev_hash   CHAR(64),
-  entry_hash  CHAR(64)      NOT NULL,
-  signature   TEXT,
-  created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- The activity log (R17) lives in identity_db (25_setA_r17_audit_log.sql), not next to the ballots.

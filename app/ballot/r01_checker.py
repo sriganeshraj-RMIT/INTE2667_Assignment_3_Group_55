@@ -5,7 +5,7 @@
 
 The checker never asks who is voting. It does not import current_user, reads only the PUBLIC key (n, e),
 records a used pass as a SHA-256 hash with the election and nothing else, and hands the ballot to R4's
-store_ballot (random id, no time, shuffled batch). It writes no audit entry for a good ballot, because one
+store_ballot (random id, no time, shuffled batch), then returns R6's signed receipt. It writes no audit entry for a good ballot, because one
 entry per ballot would put a time next to each vote (R4 logs one entry per batch instead).
 
 Order matters: the pass is marked used FIRST (the database refuses a second use), then the ballot is stored,
@@ -23,6 +23,7 @@ from . import bp
 from .r01_blind import full_domain_hash, verify
 from .r01_models import PassKey, SpentPass
 from .r04_ballot_box import BallotBoxError, store_ballot
+from .r06_receipt import make_receipt
 from app.common.audit import audit
 from app.common.security import csrf_exempt
 from app.common.validate import validate
@@ -90,4 +91,5 @@ def ballot_cast(election_id):
         ballot_hash = cast_ballot(election_id, data["token"], data["signature"], data["sealed_ballot"])
     except CastError as e:
         return error_response(e)
-    return jsonify({"accepted": True, "ballot_hash": ballot_hash}), 201
+    # R6: the voter gets a signed confirmation code built from the SEALED ballot, never from their choices
+    return jsonify({"accepted": True, **make_receipt(election_id, ballot_hash)}), 201

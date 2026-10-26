@@ -6,6 +6,11 @@ officer sees an error. That way a bug (or a quiet change) in one program cannot 
 
 Who may count: a counting officer or an admin, each with live R14 access ("counting"), after polls have closed.
 The ballots are opened here with 3 of the 5 key shares (R5), which the officer supplies in the request.
+
+Before any ballot is opened, the count looks after the ballot box (R4 and R20):
+  1. the last, part-full batch of ballots that R4 still holds in Redis is written to the box (flush_pending);
+  2. the box's chain of signed links is checked. If any ballot was changed, removed or added, the count is
+     refused and nothing is saved.
 """
 import json
 
@@ -16,7 +21,7 @@ from . import bp
 from app.auth.r14_elevation import elevation_required
 from app.auth.r14_models import now
 from app.common.audit import audit
-from app.ballot import r05_open
+from app.ballot import r04_ballot_box, r05_open, r20_chain
 from app.common.auth import current_user, login_required, role_required
 from app.extensions import db
 from . import r07_count_a, r07_count_b
@@ -53,6 +58,23 @@ def is_formal(ballot, candidate_ids):
     return sorted(numbers) == list(range(1, len(numbers) + 1))
 
 
+def check_ballot_box(user, election_id):
+    """R4 + R20: write the ballots still waiting, then make sure nobody has touched the box. Refuses otherwise."""
+    try:
+        r04_ballot_box.flush_pending(election_id)                       # R4 keeps the last part-full batch in Redis
+    except Exception as error:                                          # never count a box we could not fully read
+        audit("ELECTION_COUNT_BOX_UNAVAILABLE", actor_id=user["id"],
+              details={"election_id": election_id, "reason": type(error).__name__})     # the class only, no details
+        raise CountError("BALLOT_BOX_UNAVAILABLE",
+                         "The ballot box could not be read completely. The count was not started.", 503)
+    chain = r20_chain.verify_ballot_chain(election_id)
+    if not chain["valid"]:
+        audit("ELECTION_COUNT_CHAIN_BROKEN", actor_id=user["id"],
+              details={"election_id": election_id, "problem": chain["problem"]})
+        raise CountError("BALLOT_BOX_TAMPERED",
+                         "The ballot box failed its integrity check. The count was not started.", 409)
+
+
 def run_count(user, election_id, shares=None):
     if not user or user.get("role") not in COUNT_ROLES:
         audit("ELECTION_COUNT_REFUSED", actor_id=(user or {}).get("id", "anonymous"),
@@ -63,6 +85,7 @@ def run_count(user, election_id, shares=None):
         raise CountError("NOT_FOUND", "No such election.", 404)
     if status != "CLOSED":
         raise CountError("POLLS_NOT_CLOSED", "The count can only start after the polls have closed.", 409)
+    check_ballot_box(user, election_id)                                 # flush the last batch, then check the chain
 
     rows = db.session.execute(text("SELECT id, name FROM candidates WHERE election_id = :eid"),
                               {"eid": election_id}).all()

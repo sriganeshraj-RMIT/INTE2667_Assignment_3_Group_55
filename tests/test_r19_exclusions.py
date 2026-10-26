@@ -1,4 +1,5 @@
 """R19 - Two-person rule for candidate exclusions."""
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -185,6 +186,51 @@ def test_sql_injection_text_is_just_text(app):
     assert db.session.query(Exclusion).count() == 0
 
 
-@pytest.mark.skip(reason="Turn on when R12 (mfa_required) is merged: approving without a fresh MFA check must be refused")
-def test_approve_needs_a_fresh_second_sign_in_step(app):
-    ...
+# ---------------------------------------- the second sign-in step (R12's mfa_required on the approve route)
+# Like login and CSRF, the real second-step check is off while TESTING is True, so these tests switch it on.
+def approve_over_http(app, monkeypatch, exclusion_id, session_data):
+    """Delegate 2 approves, with a session holding exactly `session_data`."""
+    app.config["MFA_ENFORCE"] = True
+    login_as(monkeypatch, "delegate2", MODULE)
+    client = app.test_client()
+    with client.session_transaction() as s:
+        s.update(session_data)
+    return client.post(f"/election/exclusions/{exclusion_id}/approve")
+
+
+def test_approving_without_a_second_sign_in_step_is_refused(app, monkeypatch):
+    ex = propose("delegate1")
+    resp = approve_over_http(app, monkeypatch, ex.id, {})
+    assert resp.status_code == 401
+    assert db.session.get(Exclusion, ex.id).status == "PENDING"
+    assert r19.approved_candidate_ids("e1") == []
+
+
+def test_approving_with_a_fresh_second_step_works(app, monkeypatch):
+    ex = propose("delegate1")
+    resp = approve_over_http(app, monkeypatch, ex.id,
+                             {"mfa_user": USERS["delegate2"]["id"], "mfa_at": int(time.time())})
+    assert resp.status_code == 200 and resp.get_json() == {"status": "APPROVED"}
+
+
+def test_a_second_step_older_than_fifteen_minutes_is_refused(app, monkeypatch):
+    ex = propose("delegate1")
+    resp = approve_over_http(app, monkeypatch, ex.id,
+                             {"mfa_user": USERS["delegate2"]["id"], "mfa_at": int(time.time()) - 16 * 60})
+    assert resp.status_code == 401 and db.session.get(Exclusion, ex.id).status == "PENDING"
+
+
+def test_someone_elses_second_step_does_not_count(app, monkeypatch):
+    ex = propose("delegate1")
+    resp = approve_over_http(app, monkeypatch, ex.id,
+                             {"user_id": USERS["delegate2"]["id"], "last_seen": int(time.time()),
+                              "mfa_user": USERS["delegate1"]["id"], "mfa_at": int(time.time())})
+    assert resp.status_code == 401 and db.session.get(Exclusion, ex.id).status == "PENDING"
+
+
+def test_proposing_does_not_need_the_second_step(app, monkeypatch):
+    app.config["MFA_ENFORCE"] = True
+    login_as(monkeypatch, "delegate1", MODULE)
+    resp = app.test_client().post("/election/exclusions",
+                                  json={"election_id": "e1", "candidate_id": "c1", "reason": "Court order"})
+    assert resp.status_code == 201

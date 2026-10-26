@@ -10,6 +10,9 @@ def create_app():
     from .extensions import db
     db.init_app(app)
 
+    from .common.security import init_security
+    init_security(app)
+
     from .auth import bp as auth_bp
     from .enrolment import bp as enrolment_bp
     from .ballot import bp as ballot_bp

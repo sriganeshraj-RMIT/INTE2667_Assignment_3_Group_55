@@ -30,6 +30,7 @@ from sqlalchemy import text
 from app.common.audit import audit
 from app.election.r10_lock import require_polls_open
 from app.extensions import db, get_redis
+from .r20_chain import link_batch
 
 BATCH_SIZE = 10                 # ballots held back before a shuffled write (config: BALLOT_BATCH_SIZE)
 MAX_SEALED_LENGTH = 20000       # a sealed ballot is a few kB; refuse anything far bigger
@@ -103,9 +104,10 @@ def _flush(election_id):
             for sealed in waiting]
     try:
         with db.engines["ballot"].begin() as connection:                 # all of the batch, or none of it
+            link_batch(connection, election_id, rows)                    # R20: chain the ballots, sign the head
             connection.execute(
-                text("INSERT INTO ballots (id, election_id, ciphertext, ballot_hash, definition_fp, batch_id) "
-                     "VALUES (:id, :eid, :ct, :h, :fp, :batch)"), rows)
+                text("INSERT INTO ballots (id, election_id, ciphertext, ballot_hash, definition_fp, batch_id, "
+                     "chain_prev, chain_head) VALUES (:id, :eid, :ct, :h, :fp, :batch, :prev, :head)"), rows)
     except Exception:
         get_redis().rpush(_pending_key(election_id), *waiting)            # put them back: never lose a ballot
         raise

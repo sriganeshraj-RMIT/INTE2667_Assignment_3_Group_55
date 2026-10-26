@@ -13,7 +13,7 @@ replacing current_user keep working. To test the real checks set LOGIN_ENFORCE /
 import time
 from functools import wraps
 
-from flask import current_app, session
+from flask import current_app, request, session
 from werkzeug.exceptions import Forbidden, Unauthorized
 
 IDLE_SECONDS = 5 * 60             # R8: sign out after 5 minutes without a request (shared terminals)
@@ -38,6 +38,11 @@ class MfaRequired(Unauthorized):
 def _enforced(flag):
     value = current_app.config.get(flag)
     return (not current_app.config.get("TESTING", False)) if value is None else bool(value)
+
+
+def _log_refusal(event, actor_id, details):
+    from app.common.audit import audit               # imported here to avoid a circular import
+    audit(event, actor_id=actor_id, details=details)
 
 
 # ------------------------------------------------------------------ session (R8)
@@ -122,6 +127,9 @@ def role_required(*roles):
                 if user is None:
                     raise NotSignedIn()
                 if user["role"] not in roles:
+                    # Logged here once for every route, so R11 can see wrong-role attempts.
+                    # Only the role and the path: never the request body (it can hold key shares).
+                    _log_refusal("AUTH_ACCESS_DENIED", user["id"], {"role": user["role"], "path": request.path})
                     raise WrongRole()
             return f(*args, **kwargs)
         return decorated
@@ -144,6 +152,7 @@ def mfa_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if _enforced("MFA_ENFORCE") and not mfa_passed_recently():
+            _log_refusal("AUTH_MFA_REQUIRED", session.get("user_id") or "anonymous", {"path": request.path})
             raise MfaRequired()
         return f(*args, **kwargs)
     return decorated

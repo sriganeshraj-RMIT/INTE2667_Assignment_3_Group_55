@@ -1,7 +1,7 @@
 """R8 - Access security: password sign-in, protected session cookie, 5-minute idle timeout,
 temporary staff disabled after their contract or 30 days unused."""
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from argon2 import PasswordHasher
@@ -149,16 +149,16 @@ def test_activity_keeps_the_session_alive(client):
 
 # ------------------------------------------------------------------ temporary staff
 def test_temp_staff_past_contract_end_is_disabled_at_sign_in(app, client):
-    add("u-temp", "temp@evp.test", contract_end=date.today() - timedelta(days=1))
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() - timedelta(days=1))
     resp = sign_in(client, "temp@evp.test")
     assert resp.status_code == 403 and resp.get_json()["error"] == "ACCOUNT_DISABLED"
     assert db.session.get(Account, "u-temp").status == "DISABLED"
 
 
 def test_temp_staff_unused_for_30_days_is_disabled(app):
-    add("u-temp", "temp@evp.test", contract_end=date.today() + timedelta(days=60),
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() + timedelta(days=60),
         last_login=r08.now() - timedelta(days=31))
-    add("u-temp2", "temp2@evp.test", contract_end=date.today() + timedelta(days=60),
+    add("u-temp2", "temp2@evp.test", contract_end=r08.now().date() + timedelta(days=60),
         last_login=r08.now() - timedelta(days=5))
     assert r08.disable_expired_staff() == ["temp@evp.test"]
     assert db.session.get(Account, "u-temp2").status == "ACTIVE"
@@ -171,7 +171,7 @@ def test_permanent_staff_are_not_disabled_for_being_unused(app):
 
 
 def test_disable_command(app):
-    add("u-temp", "temp@evp.test", contract_end=date.today() - timedelta(days=1))
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() - timedelta(days=1))
     out = app.test_cli_runner().invoke(args=["auth", "disable-expired-staff"])
     assert "disabled temp@evp.test" in out.output
 
@@ -192,3 +192,25 @@ def test_seed_command_sets_real_hashes(app, monkeypatch):
 def test_login_input_is_validated(client):
     assert client.post("/auth/login", json={"email": "not-an-email", "password": "x"}).status_code == 400
     assert client.post("/auth/login", json={"email": "a@b.c", "password": "x", "extra": 1}).status_code == 400
+
+
+# ------------------------------------------------------------------ refusals are logged (for R11)
+def test_wrong_role_is_logged_with_role_and_path_only(app, client):
+    from app.audit.models import AuditEntry
+    sign_in(client)
+    pass_mfa(client)
+    assert client.get("/_t/admin-only").status_code == 403
+    row = db.session.query(AuditEntry).order_by(AuditEntry.id.desc()).first()
+    assert row.event == "AUTH_ACCESS_DENIED" and row.actor_id == "u-officer"
+    assert row.details == '{"path":"/_t/admin-only","role":"officer"}'
+
+
+def test_missing_fresh_mfa_is_logged(app, client):
+    from app.audit.models import AuditEntry
+    from app.common.auth import mfa_required
+    app.config["MFA_ENFORCE"] = True
+    app.add_url_rule("/_t/mfa", "t_mfa", mfa_required(lambda: jsonify(ok=True)))
+    sign_in(client)
+    assert client.get("/_t/mfa").status_code == 401
+    row = db.session.query(AuditEntry).order_by(AuditEntry.id.desc()).first()
+    assert row.event == "AUTH_MFA_REQUIRED" and row.actor_id == "u-officer"

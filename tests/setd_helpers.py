@@ -12,6 +12,7 @@ USERS = {
     "counter":   {"id": "user-counter-1",  "role": "counting_officer", "division": None, "state": None},
     "counter2":  {"id": "user-counter-2",  "role": "counting_officer", "division": None, "state": None},
     "admin":     {"id": "user-admin-1",    "role": "admin",            "division": None, "state": None},
+    "admin2":    {"id": "user-admin-2",    "role": "admin",            "division": None, "state": None},
     "custodian": {"id": "user-custodian-1", "role": "custodian",       "division": None, "state": None},
     "delegate1": {"id": "user-delegate-1", "role": "delegate",         "division": None, "state": None},
     "delegate2": {"id": "user-delegate-2", "role": "delegate",         "division": None, "state": None},

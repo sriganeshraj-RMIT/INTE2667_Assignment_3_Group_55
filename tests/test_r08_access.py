@@ -192,3 +192,15 @@ def test_seed_command_sets_real_hashes(app, monkeypatch):
 def test_login_input_is_validated(client):
     assert client.post("/auth/login", json={"email": "not-an-email", "password": "x"}).status_code == 400
     assert client.post("/auth/login", json={"email": "a@b.c", "password": "x", "extra": 1}).status_code == 400
+
+
+# ------------------------------------------------------------------ refusals are logged (for R11)
+def test_wrong_role_is_logged_with_role_and_path_only(app, client):
+    from app.audit.models import AuditEntry
+    sign_in(client)
+    pass_mfa(client)
+    assert client.get("/_t/admin-only").status_code == 403
+    row = db.session.query(AuditEntry).order_by(AuditEntry.id.desc()).first()
+    assert row.event == "AUTH_ACCESS_DENIED" and row.actor_id == "u-officer"
+    assert row.details == '{"path":"/_t/admin-only","role":"officer"}'
+

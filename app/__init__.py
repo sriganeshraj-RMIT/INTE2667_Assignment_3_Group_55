@@ -13,6 +13,9 @@ def create_app():
     from .common.security import init_security
     init_security(app)
 
+    from .common.auth import init_auth
+    init_auth(app)
+
     from .auth import bp as auth_bp
     from .enrolment import bp as enrolment_bp
     from .ballot import bp as ballot_bp

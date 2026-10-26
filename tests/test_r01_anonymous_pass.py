@@ -330,3 +330,23 @@ def test_getting_a_pass_needs_sign_in_and_mfa(app, client, box):
     with client.session_transaction() as s:                          # password step only, no MFA
         s["user_id"], s["last_seen"] = VOTER["id"], int(time.time())
     assert client.post("/ballot/e1/pass", json={"blinded": "abcdef"}).status_code == 401
+
+
+# ---------------------------------------------------------------- wired into the real app
+def test_the_r1_routes_exist_in_the_running_app():
+    """create_app() alone (app/ballot/routes.py) must register every R1 route, not only the test imports."""
+    rules = {(r.rule, m) for r in create_app().url_map.iter_rules() for m in r.methods}
+    for rule, method in (("/ballot/<election_id>/pass-key", "GET"), ("/ballot/<election_id>/pass", "POST"),
+                         ("/ballot/<election_id>/cast", "POST"), ("/ballot/<election_id>/passes/reconcile", "GET")):
+        assert (rule, method) in rules, f"{method} {rule} is not registered"
+
+
+def test_cast_needs_no_csrf_token_but_getting_a_pass_does(app, client, box, audit_log, monkeypatch):
+    act_as(monkeypatch, VOTER)
+    device = VoterDevice(client)
+    device.get_pass()
+    app.config["CSRF_ENFORCE"] = True
+    fresh = app.test_client()                                        # no session, no CSRF token
+    assert fresh.post("/ballot/e1/pass", json={"blinded": "ab"}).status_code == 403
+    assert fresh.post("/ballot/e1/cast", json={"token": device.token.hex(), "signature": format(device.signature, "x"),
+                                               "sealed_ballot": "x"}).status_code == 201

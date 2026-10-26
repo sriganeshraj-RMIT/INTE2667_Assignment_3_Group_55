@@ -24,6 +24,7 @@ from .r01_blind import full_domain_hash, verify
 from .r01_models import PassKey, SpentPass
 from .r04_ballot_box import BallotBoxError, store_ballot
 from app.common.audit import audit
+from app.common.security import csrf_exempt
 from app.common.validate import validate
 from app.election.r10_lock import ElectionError
 from app.extensions import db
@@ -82,6 +83,7 @@ def cast_ballot(election_id, token_hex, signature_hex, sealed):
 
 
 @bp.post("/<election_id>/cast")                  # final URL: /ballot/<election_id>/cast (no sign-in, on purpose)
+@csrf_exempt            # no sign-in here, so a CSRF token adds nothing and would make the device send a session cookie
 def ballot_cast(election_id):
     data = validate(CAST_SCHEMA, request.get_json(silent=True))
     try:

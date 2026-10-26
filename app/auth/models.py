@@ -18,6 +18,7 @@ class Account(db.Model):
     status = db.Column(db.String(10), nullable=False, default="PENDING")
     contract_end = db.Column(db.Date)
     last_login = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime)
     # R12 - second sign-in step
     mfa_secret_enc = db.Column(db.String(512))      # authenticator secret, encrypted, never stored in plain text
     mfa_last_step = db.Column(db.BigInteger)         # last accepted 30-second code window, so a code works once

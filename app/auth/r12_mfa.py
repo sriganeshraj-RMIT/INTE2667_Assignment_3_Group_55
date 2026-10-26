@@ -28,7 +28,7 @@ from . import bp
 from .models import Account, MfaEmailCode
 from .r14_models import now
 from app.common.audit import audit
-from app.common.auth import current_user, login_required, mfa_required
+from app.common.auth import login_required, mfa_required, password_step_required, signed_in_user
 from app.common.validate import validate
 from app.extensions import db
 
@@ -51,6 +51,11 @@ class MfaError(Exception):
 
 def error_response(e):
     return jsonify({"error": e.code, "message": e.message}), e.status
+
+
+def current_user():
+    """The person who passed the password step (R8). The second step is what these routes are for."""
+    return signed_in_user(allow_pending_mfa=True)
 
 
 def _timestamp():
@@ -173,7 +178,7 @@ def staff_without_mfa():
 
 # ----------------------------------------------------------------- routes
 @bp.post("/mfa/setup")                            # final URL: /auth/mfa/setup
-@login_required
+@password_step_required
 def mfa_setup():
     try:
         secret, uri = setup_totp(current_user())
@@ -183,7 +188,7 @@ def mfa_setup():
 
 
 @bp.post("/mfa/verify")
-@login_required
+@password_step_required
 def mfa_verify():
     data = validate(VERIFY_SCHEMA, request.get_json(silent=True) or {})
     try:
@@ -194,7 +199,7 @@ def mfa_verify():
 
 
 @bp.post("/mfa/email-code")
-@login_required
+@password_step_required
 def mfa_email_code():
     try:
         send_email_code(current_user())

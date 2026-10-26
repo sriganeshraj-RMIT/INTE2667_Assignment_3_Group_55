@@ -44,3 +44,5 @@ def verify_command():
         click.echo(f"OK: all {result['entries']} entries are intact.")
     else:
         raise click.ClickException(f"TAMPERED at entry {result['first_bad_entry']}: {result['problem']}")
+
+from . import r11_monitor   # R11 (Srikanth): security alerts

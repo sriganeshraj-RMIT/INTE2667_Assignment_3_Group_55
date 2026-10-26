@@ -11,6 +11,16 @@ services:
     volumes:
       - .:/app
 
+  monitor:                        # R11: watches the activity log and raises security alerts all the time
+    build: .
+    env_file: .env
+    command: flask audit monitor
+    restart: unless-stopped         # keeps retrying until MySQL is ready
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+
   db:
     image: mysql:8.0
     environment:

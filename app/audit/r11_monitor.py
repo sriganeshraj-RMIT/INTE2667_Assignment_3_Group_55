@@ -13,6 +13,10 @@ Two kinds of rule:
   * WINDOW: the same kind of failure by the same actor N times within WINDOW minutes (e.g. password guessing).
     The alert fires once, when the count reaches N, not again for every further failure.
 Every run also re-checks the activity log's own hash chain (verify_log); a broken chain is a CRITICAL alert.
+Every run also re-checks each election's ballot chain (R20 verify_ballot_chain). A broken one is written to the
+log as BALLOT_CHAIN_TAMPERED (once per election and problem), which the BALLOT_BOX_TAMPERED rule turns into a
+CRITICAL alert in the same pass, so nobody has to call the verify route by hand.
+In Docker the `monitor` service runs `flask audit monitor` all the time (docker-compose.yml).
 
 Alerts are kept in security_alerts (one per rule per log entry, so running twice never doubles them),
 written to the activity log as SECURITY_ALERT_RAISED, and printed as a warning for the operators.
@@ -47,10 +51,18 @@ IMMEDIATE_RULES = {
     "AUTH_MFA_LOCKED": ("MFA_LOCKED_OUT", "HIGH"),
     "BALLOT_RECEIPT_FORGED": ("FORGED_RECEIPT", "MEDIUM"),
     "BALLOT_KEY_CEREMONY_REFUSED": ("KEY_CEREMONY_ATTEMPT", "MEDIUM"),
+    "VOTERLIST_BULK_READ_ALERT": ("VOTER_LIST_HARVESTING", "HIGH"),        # R15: >1,000 records in a minute
+    "BALLOT_DOUBLE_VOTE_BLOCKED": ("DOUBLE_VOTE_ATTEMPT", "MEDIUM"),       # R3
+    "BALLOT_PASS_REUSE_BLOCKED": ("VOTING_PASS_REUSED", "MEDIUM"),         # R1
 }
 SELF_APPROVAL = ("SELF_APPROVAL_ATTEMPT", "HIGH")          # any event ending in _SELF_APPROVAL_BLOCKED
 
 NOT_A_PERSON = ("anonymous", "system")
+REFUSALS = ("AUTH_ACCESS_DENIED", "AUTH_MFA_REQUIRED")     # logged by role_required / mfa_required (R8, R12)
+
+
+def _is_refusal(e):
+    return e.event.endswith("_REFUSED") or e.event in REFUSALS
 
 # (rule, severity, threshold, which entries count, count per actor?)
 WINDOW_RULES = [
@@ -61,7 +73,9 @@ WINDOW_RULES = [
     ("MFA_GUESSING", "HIGH", 3,
      lambda e: e.event == "AUTH_MFA_FAILED" and e.actor_id not in NOT_A_PERSON, True),
     ("INSIDER_PROBING", "HIGH", 3,
-     lambda e: e.event.endswith("_REFUSED") and e.actor_id not in NOT_A_PERSON, True),
+     lambda e: _is_refusal(e) and e.actor_id not in NOT_A_PERSON, True),
+    ("ENROLMENT_PROBING", "MEDIUM", 3,                       # R15: the public enrolment check hit its limit
+     lambda e: e.event == "ENROLMENT_LOOKUP_RATE_LIMITED", False),
 ]
 
 
@@ -110,8 +124,27 @@ def _new_alert(rule, severity, actor_id, details, trigger_entry_id):
     return alert
 
 
+def _check_ballot_chains():
+    """R20: re-check every election's ballot chain. A broken one is logged (once per election and problem),
+    so the BALLOT_CHAIN_TAMPERED -> BALLOT_BOX_TAMPERED rule raises the alert in this same pass."""
+    from app.ballot.r20_chain import verify_ballot_chain
+    from app.ballot.r20_models import BallotChainHead
+    from app.common.audit import _canonical
+
+    for (election_id,) in db.session.query(BallotChainHead.election_id).all():
+        outcome = verify_ballot_chain(election_id)
+        if outcome["valid"]:
+            continue
+        details = {"election_id": election_id, "problem": outcome["problem"], "found_by": "monitor"}
+        already = AuditEntry.query.filter_by(event="BALLOT_CHAIN_TAMPERED", actor_id="system",
+                                             details=_canonical(details)).first()
+        if already is None:
+            audit("BALLOT_CHAIN_TAMPERED", actor_id="system", details=details)
+
+
 def run_rules():
     """One monitoring pass over the entries added since the last pass. Returns the new alerts."""
+    _check_ballot_chains()                                   # first, so its log entry is read in this pass
     state = db.session.get(MonitorState, 1)
     if state is None:
         state = MonitorState(id=1, last_entry_id=0)

@@ -218,3 +218,49 @@ def test_monitor_command_prints_alerts(app, clock):
     happen(1, "ELECTION_COUNT_MISMATCH", "system", clock=clock)
     out = app.test_cli_runner().invoke(args=["audit", "monitor", "--once"])
     assert "ALERT CRITICAL COUNTS_DISAGREE" in out.output and "Monitoring pass complete." in out.output
+
+
+# ---------------------------------------------------------------------- events added for R11 by other requirements
+def test_wrong_role_and_missing_mfa_count_as_insider_probing(app, clock):
+    happen(2, "AUTH_ACCESS_DENIED", "u-voter", {"role": "voter", "path": "/audit/verify"}, clock=clock)
+    happen(1, "AUTH_MFA_REQUIRED", "u-voter", {"path": "/audit/alerts"}, clock=clock)
+    assert rules_raised() == ["INSIDER_PROBING"]
+
+
+@pytest.mark.parametrize("event, rule", [
+    ("VOTERLIST_BULK_READ_ALERT", "VOTER_LIST_HARVESTING"),
+    ("BALLOT_DOUBLE_VOTE_BLOCKED", "DOUBLE_VOTE_ATTEMPT"),
+    ("BALLOT_PASS_REUSE_BLOCKED", "VOTING_PASS_REUSED"),
+])
+def test_events_from_r15_r3_and_r1_raise_an_alert(app, clock, event, rule):
+    happen(1, event, "u-voter", {"election_id": "e1"}, clock=clock)
+    assert rules_raised() == [rule]
+
+
+def test_repeated_enrolment_rate_limits_raise_enrolment_probing(app, clock):
+    happen(3, "ENROLMENT_LOOKUP_RATE_LIMITED", "anonymous", {"limit": "ip"}, clock=clock)
+    assert rules_raised() == ["ENROLMENT_PROBING"]
+
+
+# ---------------------------------------------------------------------- broken ballot chain, found automatically
+def test_a_broken_ballot_chain_is_found_without_anyone_calling_verify(app, clock):
+    from app.ballot import r20_chain as chain
+    with db.engines["ballot"].begin() as c:
+        c.execute(text("CREATE TABLE ballots (id TEXT PRIMARY KEY, election_id TEXT, ciphertext BLOB, ballot_hash TEXT, "
+                       "definition_fp TEXT, batch_id TEXT, chain_prev TEXT, chain_head TEXT)"))
+        rows = []
+        for i in range(3):
+            sealed = f"sealed-{i}".encode()
+            import hashlib
+            rows.append({"id": f"b{i}", "eid": "e1", "ct": sealed, "h": hashlib.sha256(sealed).hexdigest(),
+                         "fp": "fp", "batch": "batch-1"})
+        chain.link_batch(c, "e1", rows)
+        c.execute(text("INSERT INTO ballots VALUES (:id, :eid, :ct, :h, :fp, :batch, :prev, :head)"), rows)
+    assert rules_raised() == []                                       # intact: nothing to report
+
+    with db.engines["ballot"].begin() as c:                           # an attacker swaps a sealed ballot
+        c.execute(text("UPDATE ballots SET ciphertext = :x WHERE id = 'b1'"), {"x": b"forged"})
+    alerts = monitor.run_rules()
+    assert [(a.rule, a.severity) for a in alerts] == [("BALLOT_BOX_TAMPERED", "CRITICAL")]
+    assert rules_raised() == []                                       # the next pass does not repeat it
+

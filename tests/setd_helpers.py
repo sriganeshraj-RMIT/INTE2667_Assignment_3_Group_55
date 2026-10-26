@@ -20,6 +20,8 @@ USERS = {
     "delegate1": {"id": "user-delegate-1", "role": "delegate",         "division": None, "state": None},
     "delegate2": {"id": "user-delegate-2", "role": "delegate",         "division": None, "state": None},
     "voter":     {"id": "user-voter-1",    "role": "voter",            "division": "Melbourne", "state": "VIC"},
+    "voter2":    {"id": "user-voter-2",    "role": "voter",            "division": "Melbourne", "state": "VIC"},
+    "officer":   {"id": "user-officer-1",  "role": "officer",          "division": None, "state": None},
     "auditor":   {"id": "user-auditor-1",  "role": "auditor",          "division": None, "state": None},
 }
 
@@ -68,3 +70,43 @@ def store_sealed(election_id, sealed, ballot_id=None):
                  "VALUES (:id, :eid, :ct, :h, 'fp', 'batch-1')"),
             {"id": ballot_id or uuid.uuid4().hex, "eid": election_id, "ct": raw,
              "h": hashlib.sha256(raw).hexdigest()})
+
+
+def add_account(account_id, role="voter", status="ACTIVE", division="Melbourne", state="VIC"):
+    """Put one account in the accounts table, whatever shape that table has.
+
+    If the real Account model (R8) is loaded, its table is used and any other required column is filled with a
+    harmless value. Otherwise a small SQLite copy of the table is made.
+    """
+    table = db.metadata.tables.get("accounts")
+    given = {"id": account_id, "role": role, "status": status, "division": division, "state": state}
+    if table is None:
+        db.session.execute(text("""CREATE TABLE IF NOT EXISTS accounts (
+            id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, role TEXT, division TEXT, state TEXT, status TEXT)"""))
+        db.session.execute(text("INSERT INTO accounts (id, email, password_hash, role, division, state, status) "
+                                "VALUES (:id, :email, 'x', :role, :division, :state, :status)"),
+                           dict(given, email=f"{account_id}@test.invalid"))
+    else:
+        import datetime
+        values = {k: v for k, v in given.items() if k in table.columns}
+        for column in table.columns:
+            if column.name in values or column.nullable or column.default is not None \
+                    or column.server_default is not None or column.autoincrement is True:
+                continue
+            kind = column.type
+            if hasattr(kind, "enums") and kind.enums:
+                values[column.name] = kind.enums[0]
+            elif column.name == "email":
+                values[column.name] = f"{account_id}@test.invalid"
+            elif isinstance(kind.python_type, type) and issubclass(kind.python_type, bool):
+                values[column.name] = False
+            elif issubclass(kind.python_type, int):
+                values[column.name] = 0
+            elif issubclass(kind.python_type, datetime.datetime):
+                values[column.name] = datetime.datetime(2026, 1, 1)
+            elif issubclass(kind.python_type, datetime.date):
+                values[column.name] = datetime.date(2026, 1, 1)
+            else:
+                values[column.name] = f"x-{account_id}"
+        db.session.execute(table.insert().values(**values))
+    db.session.commit()

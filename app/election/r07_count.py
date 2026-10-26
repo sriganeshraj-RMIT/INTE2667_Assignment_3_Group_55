@@ -5,16 +5,18 @@ saved if both give exactly the same answer. If they disagree, nothing is saved, 
 officer sees an error. That way a bug (or a quiet change) in one program cannot decide an election.
 
 Who may count: a counting officer or an admin, each with live R14 access ("counting"), after polls have closed.
+The ballots are opened here with 3 of the 5 key shares (R5), which the officer supplies in the request.
 """
 import json
 
-from flask import jsonify
+from flask import jsonify, request
 from sqlalchemy import text
 
 from . import bp
 from app.auth.r14_elevation import elevation_required
 from app.auth.r14_models import now
 from app.common.audit import audit
+from app.ballot import r05_open
 from app.common.auth import current_user, login_required, role_required
 from app.extensions import db
 from . import r07_count_a, r07_count_b
@@ -30,17 +32,10 @@ class CountError(Exception):
         self.code, self.message, self.status = code, message, status
 
 
-class BallotsNotAvailable(Exception):
-    pass
-
-
-def get_decrypted_ballots(election_id):
-    """CONNECT TO R5 (Srikanth): return the opened ballots for this election.
-
-    Each ballot is a dict {candidate_id: preference_number} where 1 is the first choice.
-    Until R5 provides this, counting answers 503 BALLOTS_NOT_AVAILABLE (tests replace this function).
-    """
-    raise BallotsNotAvailable()
+def get_decrypted_ballots(election_id, shares):
+    """R5 opens the ballot box with 3 of the 5 shares. Each ballot is a dict {candidate_id: preference_number}
+    (1 = first choice); a ballot that could not be opened comes back as None and is counted as informal."""
+    return r05_open.open_ballots(election_id, shares)
 
 
 def canonical(payload):
@@ -58,7 +53,7 @@ def is_formal(ballot, candidate_ids):
     return sorted(numbers) == list(range(1, len(numbers) + 1))
 
 
-def run_count(user, election_id):
+def run_count(user, election_id, shares=None):
     if not user or user.get("role") not in COUNT_ROLES:
         audit("ELECTION_COUNT_REFUSED", actor_id=(user or {}).get("id", "anonymous"),
               details={"election_id": election_id, "role": (user or {}).get("role")})
@@ -76,9 +71,12 @@ def run_count(user, election_id):
     excluded = sorted(approved_candidate_ids(election_id))              # R19: only two-person-approved exclusions
 
     try:
-        ballots = get_decrypted_ballots(election_id)
-    except BallotsNotAvailable:
-        raise CountError("BALLOTS_NOT_AVAILABLE", "The opened ballots are not available yet.", 503)
+        ballots = get_decrypted_ballots(election_id, shares)
+    except r05_open.NoElectionKey:
+        raise CountError("NO_ELECTION_KEY", "No election key was made for this election.", 409)
+    except r05_open.BadShares:                                          # too few or wrong shares: the box stays shut
+        audit("ELECTION_COUNT_BAD_SHARES", actor_id=user["id"], details={"election_id": election_id})
+        raise CountError("BAD_SHARES", "At least 3 correct key shares are needed to open the ballots.", 403)
 
     formal = [b for b in ballots if is_formal(b, candidate_ids)]
     orders = [[cid for cid, _ in sorted(b.items(), key=lambda kv: kv[1])] for b in formal]
@@ -108,8 +106,13 @@ def run_count(user, election_id):
 @role_required("counting_officer", "admin")
 @elevation_required("counting")
 def count_votes(election_id):
+    data = request.get_json(silent=True) or {}
+    shares = data.get("shares")
+    if shares is not None and not (isinstance(shares, list) and len(shares) <= 10
+                                   and all(isinstance(s, str) and len(s) <= 200 for s in shares)):
+        return jsonify({"error": "VALIDATION_FAILED", "message": "shares must be a short list of text values"}), 400
     try:
-        row, payload = run_count(current_user(), election_id)
+        row, payload = run_count(current_user(), election_id, shares)
     except CountError as e:
         return jsonify({"error": e.code, "message": e.message}), e.status
     return jsonify({"result_id": row.id, "result": payload})

@@ -350,3 +350,21 @@ def test_cast_needs_no_csrf_token_but_getting_a_pass_does(app, client, box, audi
     assert fresh.post("/ballot/e1/pass", json={"blinded": "ab"}).status_code == 403
     assert fresh.post("/ballot/e1/cast", json={"token": device.token.hex(), "signature": format(device.signature, "x"),
                                                "sealed_ballot": "x"}).status_code == 201
+
+
+# ---------------------------------------------------------------- R6 receipt from /cast
+def test_casting_returns_a_signed_receipt_that_reveals_no_choices(client, box, audit_log, monkeypatch):
+    from app.ballot.r06_receipt import receipt_message, short_code
+    from app.common.crypto import verify
+    act_as(monkeypatch, VOTER)
+    device = VoterDevice(client)
+    device.get_pass()
+    body = device.cast(sealed="sealed-ballot-text").get_json()
+
+    expected_hash = hashlib.sha256(b"sealed-ballot-text").hexdigest()      # from the SEALED ballot only
+    assert body["accepted"] is True and body["ballot_hash"] == expected_hash
+    assert body["confirmation_code"] == short_code(expected_hash)
+    assert verify(receipt_message("e1", expected_hash), body["signature"])    # signed by the platform
+    assert not verify(receipt_message("e2", expected_hash), body["signature"])   # cannot be moved to another election
+    assert set(body) == {"accepted", "election_id", "confirmation_code", "ballot_hash", "signature", "public_key", "note"}
+

@@ -20,3 +20,6 @@ class Elector(db.Model):
     email = db.Column(db.String(255))
     status = db.Column(db.String(10), nullable=False, default="PENDING")
     created_at = db.Column(db.DateTime)
+    # R2 - added by db/init/20_setB_r02_enrolment.sql
+    doc_hash = db.Column(db.String(64), unique=True)       # keyed hash of the identity document, never the number (R9)
+    account_id = db.Column(db.String(36))                  # the voter account allowed to change this address

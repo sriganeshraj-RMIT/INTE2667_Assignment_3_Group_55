@@ -283,6 +283,43 @@ def test_a_voter_without_an_enrolment_cannot_ask(client, audit_log, letters, mon
     assert client.post("/enrolment/address-change", json={**ALEX_DOC, **NEW_ADDRESS}).status_code == 404
 
 
+# ---------------------------------------------------------------- the sign-in account follows the roll (for R3)
+def add_account(account_id, division=None, state=None):
+    db.session.add(Account(id=account_id, email=f"{account_id}@evp.test", password_hash="x", role="voter",
+                           division=division, state=state, status="ACTIVE"))
+    db.session.commit()
+
+
+def test_a_confirmed_address_change_moves_the_linked_account_too(client, audit_log, letters, monkeypatch):
+    add_account(VOTER["id"], "Melbourne", "VIC")
+    act_as(monkeypatch, VOTER)
+    client.post("/enrolment/address-change", json={**ALEX_DOC, **NEW_ADDRESS})
+    reference, code = from_letter(letters[-1])
+    assert db.session.get(Account, VOTER["id"]).division == "Melbourne"        # not before the code
+    client.post("/enrolment/address-change/confirm", json={"reference": reference, "code": code})
+    account = db.session.get(Account, VOTER["id"])
+    assert (account.division, account.state) == ("Macnamara", "VIC")
+
+
+def test_confirming_an_enrolment_sets_the_linked_accounts_division(client, audit_log, letters):
+    add_account("u-taylor")
+    reference, code = apply_taylor(client, letters)
+    taylor().account_id = "u-taylor"
+    db.session.commit()
+    client.post("/enrolment/confirm", json={"reference": reference, "code": code})
+    account = db.session.get(Account, "u-taylor")
+    assert (account.division, account.state) == ("Melbourne", "VIC")
+
+
+def test_a_wrong_code_leaves_the_account_unchanged(client, audit_log, letters, monkeypatch):
+    add_account(VOTER["id"], "Melbourne", "VIC")
+    act_as(monkeypatch, VOTER)
+    client.post("/enrolment/address-change", json={**ALEX_DOC, **NEW_ADDRESS})
+    reference, _ = from_letter(letters[-1])
+    client.post("/enrolment/address-change/confirm", json={"reference": reference, "code": "WRONG23456"})
+    assert db.session.get(Account, VOTER["id"]).division == "Melbourne"
+
+
 # ---------------------------------------------------------------- the real sign-in checks
 def signed_in(client, app, account_id, role, mfa=True):
     with app.app_context():

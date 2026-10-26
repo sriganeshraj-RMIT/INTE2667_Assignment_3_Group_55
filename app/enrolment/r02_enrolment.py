@@ -38,7 +38,9 @@ from sqlalchemy.exc import IntegrityError
 from . import bp
 from .models import Elector
 from .r02_models import EnrolmentCode, IdentityRecord, PostcodeDivision
+from .r09_minimise import link_check_to_elector, record_identity_check
 from .r15_harvest import NAME
+from app.auth.models import Account
 from app.auth.r14_models import now
 from app.common.audit import audit
 from app.common.auth import current_user, login_required, mfa_required, role_required
@@ -185,21 +187,25 @@ def apply_for_enrolment(data, officer=None):
     existing = db.session.query(Elector).filter_by(doc_hash=hashed).first()
     if _age(dob, now().date()) < MIN_AGE:
         outcome = "NOT_ELIGIBLE"
-    elif not identity_matches(data["given_name"], data["family_name"], dob, data["doc_type"], data["doc_number"]):
-        outcome = "NOT_VERIFIED"
-    elif place is None:
-        outcome = "ADDRESS_NOT_RECOGNISED"
-    elif existing is not None and existing.status == "ENROLLED":
-        outcome = "ALREADY_ENROLLED"
     else:
-        outcome = _start_enrolment(data, dob, hashed, place, existing)
+        verified = identity_matches(data["given_name"], data["family_name"], dob, data["doc_type"], data["doc_number"])
+        reference = record_identity_check(data["doc_type"], hashed, verified, "ENROL", actor,      # R9
+                                          elector_id=existing.id if existing else None)
+        if not verified:
+            outcome = "NOT_VERIFIED"
+        elif place is None:
+            outcome = "ADDRESS_NOT_RECOGNISED"
+        elif existing is not None and existing.status == "ENROLLED":
+            outcome = "ALREADY_ENROLLED"
+        else:
+            outcome = _start_enrolment(data, dob, hashed, place, existing, reference)
 
     audit("ENROLMENT_APPLIED", actor_id=actor,
           details={"outcome": outcome, "channel": "officer" if officer else "online"})
     return outcome
 
 
-def _start_enrolment(data, dob, hashed, place, existing):
+def _start_enrolment(data, dob, hashed, place, existing, check_reference=None):
     """Creates the PENDING elector (or reuses a pending one) and posts the code."""
     if existing is None:
         existing = Elector(id=str(uuid.uuid4()), given_name=data["given_name"], family_name=data["family_name"],
@@ -213,6 +219,8 @@ def _start_enrolment(data, dob, hashed, place, existing):
     except IntegrityError:                     # the same document enrolled at the same moment
         db.session.rollback()
         return "ALREADY_ENROLLED"
+    if check_reference:
+        link_check_to_elector(check_reference, existing.id)                                    # R9
     _code_letter(row, code, "ENROL")
     return "LETTER_POSTED"
 
@@ -250,6 +258,10 @@ def redeem_code(reference, code, purpose, voter=None):
     elector.state, elector.division = row.new_state, row.new_division
     if purpose == "ENROL":
         elector.status = "ENROLLED"
+    if elector.account_id:                       # keep the linked sign-in account in step with the roll,
+        account = db.session.get(Account, elector.account_id)        # because current_user() and R3 read
+        if account is not None:                                       # division and state from accounts
+            account.division, account.state = elector.division, elector.state
     db.session.execute(                          # any other letters for the same purpose stop working
         update(EnrolmentCode)
         .where(EnrolmentCode.elector_id == elector.id, EnrolmentCode.purpose == purpose,
@@ -273,9 +285,12 @@ def request_address_change(user, data):
     if elector is None:
         raise EnrolmentError("NOT_ENROLLED", "This account is not linked to an enrolment.", 404)
 
-    same_person = identity_matches(elector.given_name, elector.family_name, elector.dob,
-                                   data["doc_type"], data["doc_number"])
-    if not same_person or (elector.doc_hash and elector.doc_hash != doc_hash(data["doc_type"], data["doc_number"])):
+    hashed = doc_hash(data["doc_type"], data["doc_number"])
+    same_person = (identity_matches(elector.given_name, elector.family_name, elector.dob,
+                                    data["doc_type"], data["doc_number"])
+                   and (not elector.doc_hash or elector.doc_hash == hashed))
+    record_identity_check(data["doc_type"], hashed, same_person, "ADDRESS", user["id"], elector_id=elector.id)  # R9
+    if not same_person:
         audit("ENROLMENT_ADDRESS_CHANGE_REFUSED", actor_id=user["id"], details={"reason": "identity"})
         raise EnrolmentError("IDENTITY_NOT_VERIFIED", "The identity document does not match this enrolment.", 422)
     place = _place(data["postcode"])

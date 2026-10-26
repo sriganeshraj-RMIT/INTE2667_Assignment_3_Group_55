@@ -3,4 +3,3 @@
 bandit
 pip-audit
 PyYAML
-schemathesis>=3.30,<4

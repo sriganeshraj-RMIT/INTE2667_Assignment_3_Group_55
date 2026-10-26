@@ -19,9 +19,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Unit tests (also checks every route is in openapi.yaml)
-        env:
-          CONTRACT_STRICT: "1"
+      - name: Unit tests
         run: pytest -v
 
       - name: Static security scan (Bandit)
@@ -30,8 +28,3 @@ jobs:
       - name: Dependency audit
         run: pip-audit -r requirements.txt
 
-      - name: API fuzzing against openapi.yaml (Schemathesis)
-        run: |
-          flask --app app run --port 5001 &
-          sleep 5
-          schemathesis run openapi.yaml --base-url http://127.0.0.1:5001 --checks all

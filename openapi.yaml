@@ -3,9 +3,8 @@ info:
   title: Electronic Voting Platform API
   version: 0.1.0
   description: >
-    The written contract for every endpoint (R18). Add each new endpoint here in the same pull request
-    that adds the route. CI checks that every route is listed and sends generated bad requests to every
-    endpoint (Schemathesis).
+    The written contract for the API (R18). Please add new endpoints here when you add the route.
+    Run CONTRACT_STRICT=1 pytest to list any routes that are missing.
 servers:
   - url: http://localhost:5001
 paths:

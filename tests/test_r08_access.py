@@ -1,7 +1,7 @@
 """R8 - Access security: password sign-in, protected session cookie, 5-minute idle timeout,
 temporary staff disabled after their contract or 30 days unused."""
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from argon2 import PasswordHasher
@@ -149,16 +149,16 @@ def test_activity_keeps_the_session_alive(client):
 
 # ------------------------------------------------------------------ temporary staff
 def test_temp_staff_past_contract_end_is_disabled_at_sign_in(app, client):
-    add("u-temp", "temp@evp.test", contract_end=date.today() - timedelta(days=1))
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() - timedelta(days=1))
     resp = sign_in(client, "temp@evp.test")
     assert resp.status_code == 403 and resp.get_json()["error"] == "ACCOUNT_DISABLED"
     assert db.session.get(Account, "u-temp").status == "DISABLED"
 
 
 def test_temp_staff_unused_for_30_days_is_disabled(app):
-    add("u-temp", "temp@evp.test", contract_end=date.today() + timedelta(days=60),
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() + timedelta(days=60),
         last_login=r08.now() - timedelta(days=31))
-    add("u-temp2", "temp2@evp.test", contract_end=date.today() + timedelta(days=60),
+    add("u-temp2", "temp2@evp.test", contract_end=r08.now().date() + timedelta(days=60),
         last_login=r08.now() - timedelta(days=5))
     assert r08.disable_expired_staff() == ["temp@evp.test"]
     assert db.session.get(Account, "u-temp2").status == "ACTIVE"
@@ -171,7 +171,7 @@ def test_permanent_staff_are_not_disabled_for_being_unused(app):
 
 
 def test_disable_command(app):
-    add("u-temp", "temp@evp.test", contract_end=date.today() - timedelta(days=1))
+    add("u-temp", "temp@evp.test", contract_end=r08.now().date() - timedelta(days=1))
     out = app.test_cli_runner().invoke(args=["auth", "disable-expired-staff"])
     assert "disabled temp@evp.test" in out.output
 

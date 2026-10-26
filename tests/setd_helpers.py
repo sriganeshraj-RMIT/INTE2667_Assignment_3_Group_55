@@ -4,6 +4,9 @@ The shared login helpers are still stubs, so these tests do NOT depend on them. 
 "act as this person" by replacing `current_user` in the module under test. When R8 is merged,
 the only thing to update is `login_as` below (one place).
 """
+import hashlib
+import uuid
+
 from sqlalchemy import text
 
 from app.extensions import db
@@ -46,3 +49,22 @@ def add_election(election_id="e1", status="CLOSED", candidates=("c1", "c2", "c3"
                                 "VALUES (:id, :eid, :name, 'P', :pos)"),
                            {"id": cid, "eid": election_id, "name": f"Candidate {cid}", "pos": pos})
     db.session.commit()
+
+
+def create_ballot_tables():
+    """The `ballots` table lives in the BALLOT database. Make a small SQLite copy for tests."""
+    with db.engines["ballot"].begin() as connection:
+        connection.execute(text("""CREATE TABLE IF NOT EXISTS ballots (
+            id TEXT PRIMARY KEY, election_id TEXT NOT NULL, ciphertext BLOB NOT NULL, ballot_hash TEXT NOT NULL,
+            definition_fp TEXT NOT NULL, batch_id TEXT NOT NULL, chain_prev TEXT, chain_head TEXT)"""))
+
+
+def store_sealed(election_id, sealed, ballot_id=None):
+    """Put one sealed ballot (text or raw bytes) in the ballot database. The casting code of R1/R4 does this for real."""
+    raw = sealed.encode() if isinstance(sealed, str) else sealed
+    with db.engines["ballot"].begin() as connection:
+        connection.execute(
+            text("INSERT INTO ballots (id, election_id, ciphertext, ballot_hash, definition_fp, batch_id) "
+                 "VALUES (:id, :eid, :ct, :h, 'fp', 'batch-1')"),
+            {"id": ballot_id or uuid.uuid4().hex, "eid": election_id, "ct": raw,
+             "h": hashlib.sha256(raw).hexdigest()})

@@ -5,7 +5,7 @@ APPROVE it, after a fresh second sign-in step (@mfa_required). Until both steps 
 count. Both steps are written to the audit log, so one account can never change a result alone.
 """
 from flask import jsonify, request
-from sqlalchemy import text
+from sqlalchemy import text, update
 
 from . import bp
 from app.auth.r14_models import now
@@ -34,14 +34,17 @@ def error_response(e):
     return jsonify({"error": e.code, "message": e.message}), e.status
 
 
-def _require_delegate(user):
+def _require_delegate(user, action, **details):
+    """Only delegates may touch exclusions. A wrong-role attempt is logged (R11 can watch for these)."""
     if not user or user.get("role") not in DELEGATE_ROLES:
+        audit("ELECTION_EXCLUSION_REFUSED", actor_id=(user or {}).get("id", "anonymous"),
+              details={"action": action, "role": (user or {}).get("role"), **details})
         raise ExclusionError("FORBIDDEN", "Only a delegate can do this.", 403)
 
 
 # ------------------------------------------------------------------ logic
 def propose_exclusion(user, election_id, candidate_id, reason):
-    _require_delegate(user)
+    _require_delegate(user, "propose", election_id=election_id, candidate_id=candidate_id)
     found = db.session.execute(                      # bound parameters only, never string-built SQL
         text("SELECT 1 FROM candidates WHERE id = :cid AND election_id = :eid"),
         {"cid": candidate_id, "eid": election_id}).first()
@@ -61,7 +64,7 @@ def propose_exclusion(user, election_id, candidate_id, reason):
 
 
 def approve_exclusion(user, exclusion_id):
-    _require_delegate(user)
+    _require_delegate(user, "approve", exclusion_id=exclusion_id)
     exclusion = db.session.get(Exclusion, exclusion_id)
     if exclusion is None:
         raise ExclusionError("NOT_FOUND", "No exclusion with that ID.", 404)
@@ -71,24 +74,35 @@ def approve_exclusion(user, exclusion_id):
         audit("ELECTION_EXCLUSION_SELF_APPROVAL_BLOCKED", actor_id=user["id"],
               details={"exclusion_id": exclusion.id})
         raise ExclusionError("SELF_APPROVAL", "A second delegate must approve this exclusion.", 403)
-    exclusion.status, exclusion.approved_by, exclusion.decided_at = "APPROVED", user["id"], now()
+    # ONE update that only succeeds while the exclusion is still pending and not the approver's own.
+    result = db.session.execute(
+        update(Exclusion)
+        .where(Exclusion.id == exclusion.id, Exclusion.status == "PENDING", Exclusion.proposed_by != user["id"])
+        .values(status="APPROVED", approved_by=user["id"], decided_at=now())
+        .execution_options(synchronize_session=False))
     db.session.commit()
+    if result.rowcount != 1:
+        raise ExclusionError("ALREADY_DECIDED", "This exclusion has already been decided.", 409)
     audit("ELECTION_EXCLUSION_APPROVED", actor_id=user["id"],
           details={"exclusion_id": exclusion.id, "candidate_id": exclusion.candidate_id})
-    return exclusion
+    return db.session.get(Exclusion, exclusion.id)
 
 
 def reject_exclusion(user, exclusion_id):
-    _require_delegate(user)
+    _require_delegate(user, "reject", exclusion_id=exclusion_id)
     exclusion = db.session.get(Exclusion, exclusion_id)
     if exclusion is None:
         raise ExclusionError("NOT_FOUND", "No exclusion with that ID.", 404)
     if exclusion.status != "PENDING":
         raise ExclusionError("ALREADY_DECIDED", "This exclusion has already been decided.", 409)
-    exclusion.status, exclusion.decided_at = "REJECTED", now()
+    result = db.session.execute(
+        update(Exclusion).where(Exclusion.id == exclusion.id, Exclusion.status == "PENDING")
+        .values(status="REJECTED", decided_at=now()).execution_options(synchronize_session=False))
     db.session.commit()
+    if result.rowcount != 1:
+        raise ExclusionError("ALREADY_DECIDED", "This exclusion has already been decided.", 409)
     audit("ELECTION_EXCLUSION_REJECTED", actor_id=user["id"], details={"exclusion_id": exclusion.id})
-    return exclusion
+    return db.session.get(Exclusion, exclusion.id)
 
 
 def approved_candidate_ids(election_id):

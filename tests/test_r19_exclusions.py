@@ -1,4 +1,6 @@
 """R19 - Two-person rule for candidate exclusions."""
+from types import SimpleNamespace
+
 import pytest
 
 from app import create_app
@@ -108,6 +110,48 @@ def test_exclusions_are_per_election(app):
     ex = propose()
     r19.approve_exclusion(USERS["delegate2"], ex.id)
     assert r19.approved_candidate_ids("e2") == []
+
+
+def test_two_delegates_approving_at_the_same_moment_only_one_wins(app, monkeypatch):
+    ex = propose("delegate1")
+    stale = SimpleNamespace(id=ex.id, status="PENDING", proposed_by=USERS["delegate1"]["id"], candidate_id="c1")
+    r19.approve_exclusion(USERS["delegate2"], ex.id)
+    monkeypatch.setattr(r19.db.session, "get", lambda model, pk: stale)       # the late one still sees 'pending'
+    third = dict(USERS["delegate2"], id="user-delegate-3")
+    with pytest.raises(r19.ExclusionError) as e:
+        r19.approve_exclusion(third, ex.id)
+    assert e.value.code == "ALREADY_DECIDED"
+    monkeypatch.undo()
+    assert db.session.get(Exclusion, ex.id).approved_by == USERS["delegate2"]["id"]
+
+
+def test_a_decision_made_in_between_cannot_be_overwritten_by_a_reject(app, monkeypatch):
+    ex = propose("delegate1")
+    stale = SimpleNamespace(id=ex.id, status="PENDING", proposed_by=USERS["delegate1"]["id"], candidate_id="c1")
+    r19.approve_exclusion(USERS["delegate2"], ex.id)
+    monkeypatch.setattr(r19.db.session, "get", lambda model, pk: stale)
+    with pytest.raises(r19.ExclusionError):
+        r19.reject_exclusion(USERS["delegate1"], ex.id)
+    monkeypatch.undo()
+    assert db.session.get(Exclusion, ex.id).status == "APPROVED"
+
+
+@pytest.mark.parametrize("who, action", [("voter", "propose"), ("counter", "approve"), ("admin", "reject")])
+def test_refused_attempts_are_logged(app, audit_log, who, action):
+    ex = propose("delegate1")
+    attempt = {"propose": lambda u: r19.propose_exclusion(u, "e1", "c2", "x"),
+               "approve": lambda u: r19.approve_exclusion(u, ex.id),
+               "reject": lambda u: r19.reject_exclusion(u, ex.id)}[action]
+    with pytest.raises(r19.ExclusionError):
+        attempt(USERS[who])
+    event, actor, details = audit_log[-1]
+    assert event == "ELECTION_EXCLUSION_REFUSED" and actor == USERS[who]["id"] and details["action"] == action
+
+
+def test_a_refused_attempt_by_nobody_is_logged_as_anonymous(app, audit_log):
+    with pytest.raises(r19.ExclusionError):
+        r19.propose_exclusion(None, "e1", "c1", "x")
+    assert audit_log[-1][1] == "anonymous"
 
 
 # --------------------------------------------------------------------- HTTP

@@ -1,0 +1,154 @@
+openapi: 3.0.3
+info:
+  title: Electronic Voting Platform API
+  version: 0.1.0
+  description: >
+    The written contract for every endpoint (R18). Add each new endpoint here in the same pull request
+    that adds the route. CI checks that every route is listed and sends generated bad requests to every
+    endpoint (Schemathesis).
+servers:
+  - url: http://localhost:5001
+paths:
+  /health:
+    get:
+      summary: The service is running
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                additionalProperties: false
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+        default:
+          $ref: "#/components/responses/Error"
+  /health/db:
+    get:
+      summary: Connection status of the two databases
+      responses:
+        "200":
+          description: Both databases are reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DbStatus"
+        "503":
+          description: At least one database is not reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DbStatus"
+        default:
+          $ref: "#/components/responses/Error"
+  /csrf-token:
+    get:
+      summary: A token to send back in the X-CSRF-Token header on POST, PUT, PATCH and DELETE requests
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [csrf_token]
+                additionalProperties: false
+                properties:
+                  csrf_token:
+                    type: string
+        default:
+          $ref: "#/components/responses/Error"
+  /auth/elevation/request:
+    post:
+      summary: R14 - a counting officer asks for time-limited elevated access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket_no, reason, scope]
+              additionalProperties: false
+              properties:
+                ticket_no:
+                  type: string
+                  maxLength: 20
+                reason:
+                  type: string
+                  maxLength: 200
+                scope:
+                  type: string
+                  enum: [counting, results]
+      responses:
+        "201":
+          description: Request recorded as PENDING
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant_id, status]
+                properties:
+                  grant_id:
+                    type: string
+                  status:
+                    type: string
+        default:
+          $ref: "#/components/responses/Error"
+  /auth/elevation/{grant_id}/approve:
+    post:
+      summary: R14 - a second person (admin or custodian) approves; access lasts 4 hours
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, expires_at]
+                properties:
+                  status:
+                    type: string
+                  expires_at:
+                    type: string
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  schemas:
+    DbStatus:
+      type: object
+      required: [identity_db, ballot_db]
+      additionalProperties: false
+      properties:
+        identity_db:
+          type: string
+          enum: [up, down]
+        ballot_db:
+          type: string
+          enum: [up, down]
+    Error:
+      type: object
+      required: [error, message]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          pattern: "^[A-Z0-9_]+$"
+        message:
+          type: string
+  responses:
+    Error:
+      description: Any error, in the team's standard format
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

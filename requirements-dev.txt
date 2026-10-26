@@ -1,0 +1,6 @@
+# Tools for testing and CI only (not installed in the Docker image).
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+bandit
+pip-audit
+PyYAML
+schemathesis>=3.30,<4

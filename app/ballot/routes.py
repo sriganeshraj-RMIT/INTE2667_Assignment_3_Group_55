@@ -8,3 +8,4 @@ from . import r01_checker
 from . import r01_reconcile
 
 from . import r20_chain
+from . import r06_receipt

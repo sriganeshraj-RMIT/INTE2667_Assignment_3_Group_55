@@ -6,12 +6,15 @@ import pytest
 
 from app import create_app
 from app.auth.r14_models import AccessGrant, now
+from app.ballot import r05_crypto
+from app.ballot.r05_models import ElectionKey
 from app.election import r07_count as r07
 from app.election import r07_count_a, r07_count_b
 from app.election.r07_models import CountResult
 from app.election.r19_models import Exclusion
 from app.extensions import db
-from tests.setd_helpers import USERS, add_election, create_base_tables, login_as
+from tests.setd_helpers import (USERS, add_election, create_ballot_tables, create_base_tables, login_as,
+                                store_sealed)
 
 MODULE = "app.election.r07_count"
 IDS = ["c1", "c2", "c3"]
@@ -26,6 +29,7 @@ def app():
     with app.app_context():
         db.create_all()
         create_base_tables()
+        create_ballot_tables()
         add_election("e1", "CLOSED", tuple(IDS))
         yield app
         db.session.remove()
@@ -42,7 +46,7 @@ def audit_log(monkeypatch):
 def ballots(monkeypatch):
     """Replace the (not yet connected) ballot source with a list the test controls."""
     box = {"list": list(PLAIN)}
-    monkeypatch.setattr(f"{MODULE}.get_decrypted_ballots", lambda election_id: box["list"])
+    monkeypatch.setattr(f"{MODULE}.get_decrypted_ballots", lambda election_id, shares=None: box["list"])
     return box
 
 
@@ -161,10 +165,10 @@ def test_an_admin_needs_live_access_to_count_over_http(app, ballots, monkeypatch
     assert client.post("/election/e1/count").status_code == 200
 
 
-def test_without_the_ballot_source_it_says_so(app):
+def test_without_an_election_key_it_says_so(app):
     with pytest.raises(r07.CountError) as e:
-        r07.run_count(USERS["counter"], "e1")
-    assert e.value.code == "BALLOTS_NOT_AVAILABLE" and e.value.status == 503
+        r07.run_count(USERS["counter"], "e1", ["1-a", "2-b", "3-c"])
+    assert e.value.code == "NO_ELECTION_KEY" and e.value.status == 409
 
 
 # ------------------------------------------------------------------- HTTP
@@ -186,3 +190,66 @@ def test_route_access_for_the_results_scope_is_not_enough(app, ballots, monkeypa
     login_as(monkeypatch, "counter", MODULE, "app.auth.r14_elevation")
     give_access("counter", "results")
     assert app.test_client().post("/election/e1/count").status_code == 403
+
+
+# ====================================== the whole chain with the REAL R5 (sealed ballots, 3 of 5 shares)
+@pytest.fixture(scope="module")
+def material():
+    return r05_crypto.make_election_key()
+
+
+@pytest.fixture
+def sealed_box(app, material):
+    """Election e1 has a key, and the box holds 9 really sealed ballots (the PLAIN ones) plus a damaged one."""
+    public_pem, locked, shares = material
+    db.session.add(ElectionKey(election_id="e1", public_key_pem=public_pem, locked_private_key=locked,
+                               threshold=3, share_count=5, created_by="user-custodian-1"))
+    db.session.commit()
+    for ballot in PLAIN:
+        store_sealed("e1", r05_crypto.seal_ballot(public_pem, "e1", ballot))
+    store_sealed("e1", "a damaged ballot")
+    return shares
+
+
+def test_end_to_end_three_shares_open_the_box_and_the_count_runs(sealed_box, audit_log):
+    row, payload = r07.run_count(USERS["counter"], "e1", sealed_box[:3])
+    assert payload["winner"] == "c2" and payload["ballots_counted"] == 9 and payload["ballots_informal"] == 1
+    assert audit_log[-1][0] == "ELECTION_COUNT_COMPLETED"
+
+
+def test_end_to_end_any_three_shares_give_the_same_result(sealed_box):
+    first = r07.run_count(USERS["counter"], "e1", sealed_box[:3])[1]
+    second = r07.run_count(USERS["counter"], "e1", [sealed_box[4], sealed_box[1], sealed_box[2]])[1]
+    assert first["rounds"] == second["rounds"] and first["winner"] == second["winner"]
+
+
+def test_end_to_end_two_shares_leave_the_box_shut(sealed_box, audit_log):
+    with pytest.raises(r07.CountError) as e:
+        r07.run_count(USERS["counter"], "e1", sealed_box[:2])
+    assert e.value.code == "BAD_SHARES" and e.value.status == 403
+    assert db.session.query(CountResult).count() == 0
+    assert audit_log[-1][0] == "ELECTION_COUNT_BAD_SHARES"
+
+
+def test_end_to_end_no_shares_at_all_leave_the_box_shut(sealed_box):
+    with pytest.raises(r07.CountError) as e:
+        r07.run_count(USERS["counter"], "e1")
+    assert e.value.code == "BAD_SHARES"
+
+
+def test_end_to_end_over_http_with_the_shares_in_the_request(app, sealed_box, monkeypatch):
+    login_as(monkeypatch, "counter", MODULE, "app.auth.r14_elevation")
+    give_access("counter", "counting")
+    client = app.test_client()
+    assert client.post("/election/e1/count", json={"shares": sealed_box[:2]}).get_json()["error"] == "BAD_SHARES"
+    assert client.post("/election/e1/count", json={}).get_json()["error"] == "BAD_SHARES"
+    resp = client.post("/election/e1/count", json={"shares": sealed_box[:3]})
+    assert resp.status_code == 200 and resp.get_json()["result"]["winner"] == "c2"
+
+
+@pytest.mark.parametrize("bad", ["not a list", 5, [1, 2, 3], ["x" * 500], ["1-a"] * 11])
+def test_badly_shaped_shares_in_the_request_are_refused(app, ballots, monkeypatch, bad):
+    login_as(monkeypatch, "counter", MODULE, "app.auth.r14_elevation")
+    give_access("counter", "counting")
+    resp = app.test_client().post("/election/e1/count", json={"shares": bad})
+    assert resp.status_code == 400 and resp.get_json()["error"] == "VALIDATION_FAILED"

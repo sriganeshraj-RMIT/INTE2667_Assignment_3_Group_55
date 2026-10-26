@@ -59,3 +59,5 @@ CREATE TABLE enrolment_codes (
 -- Demo: the seed voter account (01_identity.sql) can change the address of the seed elector Alex Citizen.
 UPDATE electors SET account_id = (SELECT id FROM accounts WHERE email = 'voter@evp.test')
   WHERE given_name = 'Alex' AND family_name = 'Citizen';
+-- The account carries the same division and state as the roll (current_user() and R3 read them from accounts).
+UPDATE accounts SET division = 'Melbourne', state = 'VIC' WHERE email = 'voter@evp.test';

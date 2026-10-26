@@ -152,6 +152,7 @@ def mfa_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if _enforced("MFA_ENFORCE") and not mfa_passed_recently():
+            _log_refusal("AUTH_MFA_REQUIRED", session.get("user_id") or "anonymous", {"path": request.path})
             raise MfaRequired()
         return f(*args, **kwargs)
     return decorated

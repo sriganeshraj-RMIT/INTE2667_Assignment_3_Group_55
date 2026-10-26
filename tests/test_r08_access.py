@@ -204,3 +204,13 @@ def test_wrong_role_is_logged_with_role_and_path_only(app, client):
     assert row.event == "AUTH_ACCESS_DENIED" and row.actor_id == "u-officer"
     assert row.details == '{"path":"/_t/admin-only","role":"officer"}'
 
+
+def test_missing_fresh_mfa_is_logged(app, client):
+    from app.audit.models import AuditEntry
+    from app.common.auth import mfa_required
+    app.config["MFA_ENFORCE"] = True
+    app.add_url_rule("/_t/mfa", "t_mfa", mfa_required(lambda: jsonify(ok=True)))
+    sign_in(client)
+    assert client.get("/_t/mfa").status_code == 401
+    row = db.session.query(AuditEntry).order_by(AuditEntry.id.desc()).first()
+    assert row.event == "AUTH_MFA_REQUIRED" and row.actor_id == "u-officer"

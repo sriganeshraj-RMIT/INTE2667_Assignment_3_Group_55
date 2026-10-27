@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-5">
+  <div class="card p-4">
+    <h1 class="h4 mb-3">Sign in</h1>
+    <form data-api="/auth/login" data-ok="Password accepted. Now the second step." id="login-form" data-next="{{ next }}">
+      <div class="mb-3"><label class="form-label" for="email">Email</label>
+        <input class="form-control" id="email" name="email" type="email" maxlength="255" required autocomplete="username"></div>
+      <div class="mb-3"><label class="form-label" for="password">Password</label>
+        <input class="form-control" id="password" name="password" type="password" maxlength="256" required autocomplete="current-password"></div>
+      <button class="btn btn-primary w-100" type="submit">Sign in</button>
+      <div class="form-result mt-3"></div>
+    </form>
+    <p class="text-muted small mt-3 mb-0">Every account needs a second step after the password (R12). After 5 minutes
+      without activity you are signed out (R8).</p>
+  </div>
+</div></div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/login.js') }}"></script>{% endblock %}

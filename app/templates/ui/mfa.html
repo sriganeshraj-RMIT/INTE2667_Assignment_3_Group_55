@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Second step{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-md-6">
+  <div class="card p-4" id="mfa" data-step="{{ step }}" data-next="{{ next }}">
+    <h1 class="h4 mb-3">Second sign-in step</h1>
+
+    {% if step == 'setup' %}
+    <div id="setup-box">
+      <p>Staff accounts must use an authenticator app (Google Authenticator, Microsoft Authenticator, Authy...).
+        There is no email fallback for staff.</p>
+      <button class="btn btn-outline-primary" id="setup-btn" type="button">Set up my authenticator app</button>
+      <div id="setup-result" class="mt-3 hidden">
+        <p class="mb-1">Scan this QR code, or type the key into the app:</p>
+        <div class="qr-box mb-2"><img id="qr" alt="QR code for the authenticator app"></div>
+        <p class="mono" id="secret"></p>
+        <p class="small text-muted">The key is shown only once. It is stored encrypted on the server.</p>
+      </div>
+    </div>
+    {% elif step == 'email' %}
+    <p>Enter the code from your authenticator app, or ask for a one-time code by email (voters only).</p>
+    <button class="btn btn-outline-secondary mb-3" id="email-btn" type="button">Email me a code</button>
+    <div id="email-result"></div>
+    {% else %}
+    <p>Enter the 6-digit code from your authenticator app.</p>
+    {% endif %}
+
+    <form data-api="/auth/mfa/verify" data-ok="Second step passed." data-redirect="{{ next }}" class="mt-2">
+      <label class="form-label" for="code">6-digit code</label>
+      <input class="form-control mb-3" id="code" name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" required autocomplete="one-time-code">
+      <button class="btn btn-primary w-100" type="submit">Confirm</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div>
+</div></div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='vendor/qrcode-generator-1.4.4/qrcode.js') }}"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/mfa.js') }}"></script>
+{% endblock %}

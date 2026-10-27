@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Welcome, {{ me_email }}</h1>
+<p class="text-muted">Signed in as <strong>{{ me.role }}</strong>{% if me.division %} in {{ me.division }}, {{ me.state }}{% endif %}.
+  Both sign-in steps are done.</p>
+<div class="row g-3">
+  {% if me.role == 'voter' %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Vote</h2>
+    <p class="small">Vote in an open election in your division. Your ballot is sealed on this device.</p>
+    <a class="btn btn-primary" href="/vote">Go to voting</a></div></div>
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Change my enrolled address</h2>
+    <p class="small">Re-check your identity document; a code is posted to the new address.</p>
+    <a class="btn btn-outline-primary" href="/account/address">Change address</a></div></div>
+  {% endif %}
+  {% if me.role == 'officer' %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Officer desk</h2>
+    <p class="small">Register a citizen, mark off in-person and postal votes, search the roll in your division.</p>
+    <a class="btn btn-primary" href="/staff/officer">Open the officer desk</a></div></div>
+  {% endif %}
+  {% if me.role in ('delegate', 'custodian', 'counting_officer', 'admin') %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Manage elections</h2>
+    <p class="small">
+      {% if me.role == 'delegate' %}Lock and sign candidate lists and polling times.{% endif %}
+      {% if me.role == 'custodian' %}Run the key ceremony (3 of 5 shares).{% endif %}
+      {% if me.role in ('counting_officer', 'admin') %}Count with 3 key shares and publish signed results.{% endif %}
+    </p>
+    <a class="btn btn-primary" href="/staff/elections">Manage elections</a></div></div>
+  {% endif %}
+  {% if me.role in ('counting_officer', 'admin', 'custodian') %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Time-limited access</h2>
+    <p class="small">Ask for, or approve, 4-hour access to counting and results. Nobody approves their own.</p>
+    <a class="btn btn-outline-primary" href="/staff/access">Access requests</a></div></div>
+  {% endif %}
+  {% if me.role == 'delegate' %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Candidate exclusions</h2>
+    <p class="small">Propose, approve or reject exclusions. A second delegate must approve.</p>
+    <a class="btn btn-outline-primary" href="/staff/exclusions">Exclusions</a></div></div>
+  {% endif %}
+  {% if me.role in ('auditor', 'admin') %}
+  <div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6">Audit and alerts</h2>
+    <p class="small">Check the tamper-proof log and ballot boxes, see security alerts, reconcile voting passes.</p>
+    <a class="btn btn-primary" href="/audit">Audit and alerts</a></div></div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="p-4 mb-4 bg-white rounded card">
+  <h1 class="h3">Electronic Voting Platform</h1>
+  <p class="mb-0">A prototype of a secure online voting system. Your vote is sealed on your own device and cast with an
+    anonymous voting pass, so nobody, including the AEC, can link your ballot to you.</p>
+</div>
+<div class="row g-3">
+  <div class="col-md-4"><div class="card h-100 p-3">
+    <h2 class="h5">Voters</h2>
+    <p>Sign in with your password and second step, then vote in your division's open election.</p>
+    <a class="btn btn-primary" href="{{ '/vote' if me else '/login?next=/vote' }}">Go to voting</a>
+  </div></div>
+  <div class="col-md-4"><div class="card h-100 p-3">
+    <h2 class="h5">Check your receipt</h2>
+    <p>After voting you get a signed confirmation code. Anyone can check it is in the ballot box. It never shows how you voted.</p>
+    <a class="btn btn-outline-primary" href="/receipt">Check a receipt</a>
+  </div></div>
+  <div class="col-md-4"><div class="card h-100 p-3">
+    <h2 class="h5">Elections and results</h2>
+    <p>See the signed candidate list for each election, and the signed published results.</p>
+    <a class="btn btn-outline-primary" href="/elections">See elections</a>
+  </div></div>
+  <div class="col-md-4"><div class="card h-100 p-3">
+    <h2 class="h5">Enrolment</h2>
+    <p>Enrol to vote, confirm the code we post to your address, or check if you are enrolled.</p>
+    <a class="btn btn-outline-primary" href="/enrol">Enrolment</a>
+  </div></div>
+  <div class="col-md-4"><div class="card h-100 p-3">
+    <h2 class="h5">AEC staff</h2>
+    <p>Officers, delegates, custodians, counting officers, auditors and admins sign in for their own tools.</p>
+    <a class="btn btn-outline-dark" href="{{ '/dashboard' if me else '/login?next=/dashboard' }}">Staff sign-in</a>
+  </div></div>
+</div>
+{% endblock %}

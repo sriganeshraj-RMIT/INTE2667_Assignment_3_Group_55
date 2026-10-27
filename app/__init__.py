@@ -21,8 +21,9 @@ def create_app():
     from .ballot import bp as ballot_bp
     from .election import bp as election_bp
     from .audit import bp as audit_bp
+    from .ui import bp as ui_bp                  # the GUI pages
 
-    for bp in (auth_bp, enrolment_bp, ballot_bp, election_bp, audit_bp):
+    for bp in (auth_bp, enrolment_bp, ballot_bp, election_bp, audit_bp, ui_bp):
         app.register_blueprint(bp)
 
     @app.get("/health")

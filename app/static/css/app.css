@@ -1,0 +1,11 @@
+/* EVP front end. No inline styles anywhere (the Content-Security-Policy blocks them). */
+body { background: #f5f6f8; }
+.card { border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+.result-box { white-space: pre-wrap; word-break: break-all; font-size: .85rem; max-height: 22rem; overflow: auto; }
+.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+.receipt-code { font-size: 1.8rem; letter-spacing: .15rem; }
+.pref-input { max-width: 5.5rem; }
+.share-box { font-size: .75rem; }
+.qr-box img { width: 200px; height: 200px; image-rendering: pixelated; }
+.hidden { display: none !important; }
+.nav-role { font-size: .8rem; }

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Vote{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Elections in your division</h1>
+<div class="card p-0">
+<table class="table mb-0">
+  <thead><tr><th>Election</th><th>Polls (UTC)</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for e in elections %}
+    <tr><td>{{ e.name }}</td><td>{{ e.opens_at }} to {{ e.closes_at }}</td><td>{{ status_badge(e.status) }}</td>
+      <td>{% if e.voted %}<span class="badge bg-success">You have voted</span>
+          {% elif e.status == 'OPEN' %}<a class="btn btn-sm btn-primary" href="/vote/{{ e.id | urlencode }}">Vote now</a>
+          {% else %}<span class="text-muted small">Voting not open</span>{% endif %}</td></tr>
+  {% else %}
+    <tr><td colspan="4" class="text-muted">There are no elections for your division.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

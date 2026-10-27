@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Exclusions{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Candidate exclusions (R19)</h1>
+<div class="row g-3">
+  <div class="col-lg-5"><div class="card p-4">
+    <h2 class="h5">Propose an exclusion</h2>
+    <p class="small">For example after a Court of Disputed Returns order. A SECOND delegate must approve it, after a fresh
+      second sign-in step, before it affects the count.</p>
+    <form data-api="/election/exclusions" data-ok="Proposed. A second delegate must now approve it." data-reload="1">
+      <label class="form-label" for="candidate_pick">Candidate</label>
+      <select class="form-select mb-2" id="candidate_pick" required>
+        {% for e in elections %}{% for c in e.candidates %}
+          <option value="{{ e.id }}|{{ c.id }}">{{ e.name }} ({{ e.division }}) - {{ c.name }}</option>
+        {% endfor %}{% endfor %}
+      </select>
+      <input type="hidden" name="election_id" id="election_id">
+      <input type="hidden" name="candidate_id" id="candidate_id">
+      <label class="form-label" for="reason">Reason</label>
+      <input class="form-control mb-3" id="reason" name="reason" maxlength="200" required>
+      <button class="btn btn-primary" type="submit">Propose</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+  <div class="col-lg-7"><div class="card p-0">
+    <table class="table mb-0 small"><thead><tr><th>Candidate</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for x in exclusions %}
+        <tr><td>{{ names.get(x.candidate_id, x.candidate_id) }}</td><td>{{ x.reason }}</td><td>{{ status_badge(x.status) }}</td>
+          <td>{% if x.status == 'PENDING' %}
+            {% if x.proposed_by == me.id %}<span class="text-muted">Proposed by you</span>{% else %}
+            <form class="d-inline" data-api="/election/exclusions/{{ x.id | urlencode }}/approve" data-ok="Approved." data-reload="1">
+              <button class="btn btn-sm btn-success" type="submit">Approve</button><div class="form-result"></div></form>{% endif %}
+            <form class="d-inline" data-api="/election/exclusions/{{ x.id | urlencode }}/reject" data-ok="Rejected." data-reload="1">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button><div class="form-result"></div></form>
+          {% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="text-muted">No exclusions.</td></tr>{% endfor %}
+      </tbody></table>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/exclusions.js') }}"></script>{% endblock %}

@@ -1,0 +1,10 @@
+<div class="row g-2 mb-2">
+  <div class="col-md-6"><label class="form-label" for="{{ p }}given_name">Given name</label>
+    <input class="form-control" id="{{ p }}given_name" name="given_name" maxlength="100" required></div>
+  <div class="col-md-6"><label class="form-label" for="{{ p }}family_name">Family name</label>
+    <input class="form-control" id="{{ p }}family_name" name="family_name" maxlength="100" required></div>
+  <div class="col-md-6"><label class="form-label" for="{{ p }}dob">Date of birth</label>
+    <input class="form-control" id="{{ p }}dob" name="dob" type="date" required></div>
+  {% if with_email %}<div class="col-md-6"><label class="form-label" for="{{ p }}email">Email (optional)</label>
+    <input class="form-control" id="{{ p }}email" name="email" type="email" maxlength="255"></div>{% endif %}
+</div>

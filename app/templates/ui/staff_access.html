@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Access requests{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Time-limited access (R14)</h1>
+<div class="row g-3">
+  {% if me.role in ('counting_officer', 'admin') %}
+  <div class="col-lg-5"><div class="card p-4">
+    <h2 class="h5">Ask for access</h2>
+    <p class="small">Access to counting or results needs a ticket number and a reason, must be approved by a DIFFERENT
+      person, and switches itself off after 4 hours.</p>
+    <form data-api="/auth/elevation/request" data-ok="Request recorded. Ask an approver to approve it." data-reload="1">
+      <label class="form-label" for="ticket_no">Ticket number</label>
+      <input class="form-control mb-2" id="ticket_no" name="ticket_no" maxlength="20" required>
+      <label class="form-label" for="reason">Reason</label>
+      <input class="form-control mb-2" id="reason" name="reason" maxlength="200" required>
+      <label class="form-label" for="scope">Access to</label>
+      <select class="form-select mb-3" id="scope" name="scope"><option value="counting">counting</option><option value="results">results</option></select>
+      <button class="btn btn-primary" type="submit">Request access</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+  <div class="col-lg-7"><div class="card p-0">
+    <table class="table mb-0 small"><thead><tr><th>Ticket</th><th>Scope</th><th>Status</th><th>Expires (UTC)</th></tr></thead>
+      <tbody>
+      {% for g in mine %}
+        <tr><td>{{ g.ticket_no }}</td><td>{{ g.scope }}</td>
+          <td>{% if g.status == 'APPROVED' and g.expires_at and g.expires_at < now %}<span class="badge bg-secondary">EXPIRED</span>{% else %}{{ status_badge(g.status) }}{% endif %}</td>
+          <td>{{ g.expires_at or '-' }}</td></tr>
+      {% else %}<tr><td colspan="4" class="text-muted">You have not asked for access.</td></tr>{% endfor %}
+      </tbody></table>
+  </div></div>
+  {% endif %}
+
+  {% if me.role in ('admin', 'custodian') %}
+  <div class="col-12"><div class="card p-0">
+    <h2 class="h5 p-3 mb-0">Requests waiting for approval</h2>
+    <table class="table mb-0 small"><thead><tr><th>Ticket</th><th>Reason</th><th>Scope</th><th>Requested (UTC)</th><th></th></tr></thead>
+      <tbody>
+      {% for g in pending %}
+        <tr><td>{{ g.ticket_no }}</td><td>{{ g.reason }}</td><td>{{ g.scope }}</td><td>{{ g.requested_at }}</td>
+          <td>{% if g.requester_id == me.id %}<span class="text-muted">Your own request</span>{% else %}
+            <form data-api="/auth/elevation/{{ g.id | urlencode }}/approve" data-ok="Approved for 4 hours." data-reload="1">
+              <button class="btn btn-sm btn-success" type="submit">Approve</button><div class="form-result"></div></form>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="5" class="text-muted">Nothing is waiting.</td></tr>{% endfor %}
+      </tbody></table>
+  </div></div>
+  {% endif %}
+</div>
+{% endblock %}

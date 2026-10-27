@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Officer desk{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Officer desk - {{ me.division or 'no division assigned' }}</h1>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card p-4">
+    <h2 class="h5">Mark off a voter (R3)</h2>
+    <p class="small">For in-person and postal votes. The central register refuses a second vote on ANY channel.</p>
+    <form data-api="/ballot/{election_id}/mark-off" data-ok="Marked off.">
+      <label class="form-label" for="m-election">Election</label>
+      <select class="form-select mb-2" id="m-election" name="election_id" required>
+        {% for e in elections %}<option value="{{ e.id }}">{{ e.name }} ({{ e.status }})</option>{% endfor %}
+      </select>
+      <label class="form-label" for="voter_id">Voter account ID</label>
+      <input class="form-control mono mb-2" id="voter_id" name="voter_id" maxlength="36" required>
+      <label class="form-label" for="channel">Channel</label>
+      <select class="form-select mb-3" id="channel" name="channel"><option value="IN_PERSON">In person</option><option value="POSTAL">Postal</option></select>
+      <button class="btn btn-primary" type="submit">Mark off</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+
+  <div class="col-lg-6"><div class="card p-4">
+    <h2 class="h5">Search the roll (R15)</h2>
+    <p class="small">Only inside your own division, at most 50 results, and a family name plus a suburb or postcode is
+      required. Every search is logged; reading more than 1,000 records a minute blocks the account.</p>
+    <form data-api="/enrolment/voters/search" data-ok="Search done.">
+      <div class="row g-2">
+        <div class="col-md-6"><label class="form-label" for="s-family">Family name</label>
+          <input class="form-control" id="s-family" name="family_name" minlength="3" maxlength="100" required></div>
+        <div class="col-md-6"><label class="form-label" for="s-given">Given name (optional)</label>
+          <input class="form-control" id="s-given" name="given_name" maxlength="100"></div>
+        <div class="col-md-6"><label class="form-label" for="s-suburb">Suburb</label>
+          <input class="form-control" id="s-suburb" name="suburb" maxlength="100"></div>
+        <div class="col-md-6"><label class="form-label" for="s-postcode">Postcode</label>
+          <input class="form-control" id="s-postcode" name="postcode" pattern="\d{4}" maxlength="4"></div>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit">Search</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+
+  <div class="col-12"><div class="card p-4">
+    <h2 class="h5">Register a citizen (R2)</h2>
+    <p class="small">Only in your own division. Identity is checked against the official source, and a code is posted to
+      the address before the enrolment starts.</p>
+    <form data-api="/enrolment/officer/register" data-ok="Identity verified. A confirmation letter has been posted.">
+      {% with p='r-', with_email=True %}{% include "ui/_person_fields.html" %}{% endwith %}
+      {% with p='r-' %}{% include "ui/_identity_fields.html" %}{% endwith %}
+      {% with p='r-' %}{% include "ui/_address_fields.html" %}{% endwith %}
+      <button class="btn btn-primary mt-3" type="submit">Register</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Manage elections{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Manage elections</h1>
+{% if me.role in ('counting_officer', 'admin') %}
+<div class="alert {{ 'alert-success' if access.counting else 'alert-warning' }} py-2">
+  Counting access: <strong>{{ 'active' if access.counting else 'not active' }}</strong> &middot;
+  Results access: <strong>{{ 'active' if access.results else 'not active' }}</strong>.
+  {% if not (access.counting and access.results) %}Ask for time-limited access on the <a href="/staff/access">access requests</a> page (R14).{% endif %}
+</div>
+{% endif %}
+
+{% for e in elections %}
+<div class="card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-start">
+    <div>
+      <h2 class="h5 mb-1">{{ e.name }} - {{ e.division }}, {{ e.state }} {{ status_badge(e.status) }}</h2>
+      <p class="small text-muted mb-2">Polls {{ e.opens_at }} to {{ e.closes_at }} (UTC) &middot;
+        {{ e.candidates | length }} candidates &middot; election key: {{ 'made' if e.has_key else 'not made' }}</p>
+    </div>
+    <a class="small" href="/elections/{{ e.id | urlencode }}">Public page</a>
+  </div>
+
+  {% if me.role == 'delegate' and e.status == 'DRAFT' %}
+  <form data-api="/election/{{ e.id | urlencode }}/lock" data-ok="Locked and signed." data-reload="1"
+        data-confirm="Lock this election? The candidates, party order and times can never change afterwards.">
+    <p class="small mb-2">Candidates: {% for c in e.candidates %}{{ c.ballot_pos }}. {{ c.name }} ({{ c.party }}){% if not loop.last %}; {% endif %}{% endfor %}</p>
+    <button class="btn btn-warning btn-sm" type="submit">Lock and sign the ballot (R10)</button>
+    <div class="form-result mt-2"></div>
+  </form>
+  {% endif %}
+
+  {% if me.role == 'custodian' and e.status in ('DRAFT', 'APPROVED') and not e.has_key %}
+  <form data-api="/ballot/{{ e.id | urlencode }}/ceremony" data-ok="Key made. Give each share to a different official now: they are shown only once."
+        data-confirm="Run the key ceremony? The 5 shares will be shown only once.">
+    <button class="btn btn-warning btn-sm" type="submit">Run the key ceremony (R5)</button>
+    <div class="form-result mt-2 share-box"></div>
+  </form>
+  {% endif %}
+
+  {% if me.role in ('counting_officer', 'admin') and e.status == 'CLOSED' %}
+  <div class="row g-3">
+    <div class="col-md-7">
+      <form data-api="/election/{{ e.id | urlencode }}/count" data-ok="Counted by two independent programs; they agree.">
+        <label class="form-label small" for="shares-{{ loop.index }}">Key shares from 3 different officials (one per line)</label>
+        <textarea class="form-control mono mb-2" id="shares-{{ loop.index }}" name="shares" data-type="list" rows="3" required autocomplete="off"></textarea>
+        <button class="btn btn-primary btn-sm" type="submit">Open the ballots and count (R5, R7)</button>
+        <div class="form-result mt-2"></div>
+      </form>
+    </div>
+    <div class="col-md-5">
+      <form data-api="/election/{{ e.id | urlencode }}/results/publish" data-ok="Published and signed."
+            data-confirm="Publish the counted result? It can be published only once.">
+        <p class="small mb-2">Publishing signs the result so anyone can check it (R13).</p>
+        <button class="btn btn-success btn-sm" type="submit">Publish the result</button>
+        <div class="form-result mt-2"></div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<p class="text-muted">No elections yet.</p>
+{% endfor %}
+{% endblock %}

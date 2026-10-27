@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}Audit and alerts{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Audit and alerts</h1>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card p-4">
+    <h2 class="h5">Security alerts (R11)</h2>
+    <p class="small">The monitor reads the activity log and raises alerts for attack patterns: password guessing,
+      insider probing, forged receipts, tampered ballot boxes and more.</p>
+    <form data-api="/audit/alerts" data-method="GET" data-ok="Monitoring pass done." id="alerts-form">
+      <select class="form-select form-select-sm mb-2" name="status"><option value="OPEN">Open alerts</option><option value="ALL">All alerts</option></select>
+      <button class="btn btn-primary btn-sm" type="submit">Show alerts</button>
+    </form>
+    <div id="alerts" class="mt-3"></div><div id="alerts-json" class="hidden"></div>
+  </div></div>
+
+  <div class="col-lg-6"><div class="card p-4">
+    <h2 class="h5">Activity log (R17)</h2>
+    <p class="small">Every entry is chained to the one before and signed. Any change, removal or insertion is found.</p>
+    <form data-api="/audit/verify" data-method="GET" data-ok="Log checked." class="mb-2">
+      <button class="btn btn-primary btn-sm" type="submit">Check the whole log</button>
+      <div class="form-result mt-2"></div>
+    </form>
+    <form data-api="/audit/entries" data-method="GET" data-ok="Latest entries.">
+      <input type="hidden" name="limit" value="25">
+      <button class="btn btn-outline-primary btn-sm" type="submit">Show the latest 25 entries</button>
+      <div class="form-result mt-2"></div>
+    </form>
+  </div></div>
+
+  <div class="col-lg-6"><div class="card p-4">
+    <h2 class="h5">Ballot boxes (R20) and voting passes (R1)</h2>
+    <label class="form-label small" for="a-election">Election</label>
+    <select class="form-select form-select-sm mb-2" id="a-election">
+      {% for e in elections %}<option value="{{ e.id }}">{{ e.name }} - {{ e.division }} ({{ e.status }})</option>{% endfor %}
+    </select>
+    <form data-api="/ballot/{election_id}/chain/verify" data-method="GET" data-ok="Ballot box checked." class="mb-2 election-form">
+      <input type="hidden" name="election_id">
+      <button class="btn btn-primary btn-sm" type="submit">Check the ballot chain</button>
+      <div class="form-result mt-2"></div>
+    </form>
+    {% if me.role == 'auditor' %}
+    <form data-api="/ballot/{election_id}/passes/reconcile" data-method="GET" data-ok="Counts reconciled." class="election-form">
+      <input type="hidden" name="election_id">
+      <button class="btn btn-outline-primary btn-sm" type="submit">Reconcile passes issued, used and stored</button>
+      <div class="form-result mt-2"></div>
+    </form>
+    {% endif %}
+  </div></div>
+
+  <div class="col-lg-6"><div class="card p-4">
+    {% if me.role == 'auditor' %}
+    <h2 class="h5">De-identified copy of the roll (R9)</h2>
+    <p class="small">For analysis: names, addresses, email, exact date of birth and document hash are removed.</p>
+    <form data-api="/enrolment/analysis" data-method="GET" data-ok="De-identified copy (this request is logged).">
+      <button class="btn btn-outline-primary btn-sm" type="submit">Get the analysis copy</button>
+      <div class="form-result mt-2"></div>
+    </form>
+    {% else %}
+    <h2 class="h5">Second-step readiness (R12)</h2>
+    <p class="small">Before each election, check that every staff account has set up its authenticator app.</p>
+    <form data-api="/auth/mfa/readiness" data-method="GET" data-ok="Readiness checked.">
+      <button class="btn btn-outline-primary btn-sm" type="submit">Check staff readiness</button>
+      <div class="form-result mt-2"></div>
+    </form>
+    {% endif %}
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/audit.js') }}"></script>{% endblock %}

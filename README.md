@@ -62,6 +62,23 @@ The first run takes a few minutes while images download. Leave this terminal ope
 
 The app runs on **port 5001**, not 5000, because macOS uses port 5000 for AirPlay.
 
+### Step 4b - Use the GUI
+1. Put `DEV_SEED_PASSWORD=` (12 or more characters) in your `.env`, then give every seed account that password:
+   ```bash
+   docker compose exec app flask auth seed-dev-passwords
+   ```
+2. Open **http://localhost:5001** and sign in as any seed account (`voter@evp.test`, `officer@evp.test`,
+   `delegate@evp.test`, `delegate2@evp.test`, `custodian@evp.test`, `counter@evp.test`, `auditor@evp.test`,
+   `admin@evp.test`) with that password.
+3. Second step: staff scan the QR code with an authenticator app (or type the key); the voter can ask for an
+   emailed code, which arrives in MailHog at http://localhost:8025.
+4. Each role sees its own tools in the top bar. Election times are in **UTC**.
+5. For a demo election that opens in a few minutes: `docker compose exec app flask ui demo-election`, then sign in as
+   the delegate and lock it, and as the custodian and run the key ceremony, before it opens.
+
+Pages: `/` home, `/elections` (signed ballots and results), `/receipt`, `/enrol`, `/vote` (voter),
+`/staff/elections`, `/staff/access`, `/staff/exclusions`, `/staff/officer`, `/audit`.
+
 ### Step 5 - Stop it
 Press `Ctrl+C` in the Docker terminal, then run:
 ```bash

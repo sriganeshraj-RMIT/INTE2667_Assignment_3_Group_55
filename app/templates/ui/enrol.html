@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Enrolment{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Enrolment</h1>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card p-4">
+    <h2 class="h5">Enrol to vote (R2)</h2>
+    <p class="small">Your details are checked against the official identity source. A letter with a code is then posted
+      to the address you give; your enrolment starts only when you enter that code.</p>
+    <form data-api="/enrolment/apply" data-ok="Application received.">
+      {% with p='a-', with_email=True %}{% include "ui/_person_fields.html" %}{% endwith %}
+      {% with p='a-' %}{% include "ui/_identity_fields.html" %}{% endwith %}
+      {% with p='a-' %}{% include "ui/_address_fields.html" %}{% endwith %}
+      <button class="btn btn-primary mt-3" type="submit">Apply</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+  <div class="col-lg-5">
+    <div class="card p-4 mb-3">
+      <h2 class="h5">Enter the code from your letter</h2>
+      <form data-api="/enrolment/confirm" data-ok="You are now enrolled.">
+        <label class="form-label" for="reference">Reference</label>
+        <input class="form-control mono mb-2" id="reference" name="reference" pattern="[0-9a-f\-]{36}" required>
+        <label class="form-label" for="code">Code</label>
+        <input class="form-control mono mb-3" id="code" name="code" pattern="[A-Za-z0-9]{10}" maxlength="10" required autocomplete="off">
+        <button class="btn btn-primary" type="submit">Confirm enrolment</button>
+        <div class="form-result mt-3"></div>
+      </form>
+    </div>
+    <div class="card p-4">
+      <h2 class="h5">Am I enrolled? (R15)</h2>
+      <p class="small">The answer is emailed to the contact details on the roll, so nobody can use this page to find out
+        who is enrolled. The reply is always the same.</p>
+      <form data-api="/enrolment/check" data-ok="Request received.">
+        {% with p='c-', with_email=False %}{% include "ui/_person_fields.html" %}{% endwith %}
+        <label class="form-label" for="c-postcode">Postcode</label>
+        <input class="form-control mb-3" id="c-postcode" name="postcode" pattern="\d{4}" maxlength="4" required>
+        <button class="btn btn-outline-primary" type="submit">Check</button>
+        <div class="form-result mt-3"></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

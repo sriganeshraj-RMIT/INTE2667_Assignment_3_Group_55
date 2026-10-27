@@ -1,0 +1,8 @@
+<div class="row g-2">
+  <div class="col-md-5"><label class="form-label" for="{{ p }}doc_type">Identity document</label>
+    <select class="form-select" id="{{ p }}doc_type" name="doc_type" required>
+      <option value="PASSPORT">Australian passport</option><option value="DRIVER_LICENCE">Driver licence</option></select></div>
+  <div class="col-md-7"><label class="form-label" for="{{ p }}doc_number">Document number</label>
+    <input class="form-control" id="{{ p }}doc_number" name="doc_number" pattern="[A-Za-z0-9]{6,12}" maxlength="12" required autocomplete="off"></div>
+</div>
+<p class="small text-muted mt-1">Only a scrambled (keyed hash) form of the number is kept, never the number itself or a scan of the document (R9).</p>

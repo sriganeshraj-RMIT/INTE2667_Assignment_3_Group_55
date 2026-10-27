@@ -1,0 +1,7 @@
+{% macro status_badge(status) -%}
+  {% set colours = {'DRAFT': 'secondary', 'APPROVED': 'info', 'OPEN': 'success', 'CLOSED': 'dark',
+                    'PENDING': 'warning', 'REJECTED': 'danger', 'ACKNOWLEDGED': 'secondary'} %}
+  <span class="badge bg-{{ colours.get(status, 'secondary') }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro result_box() -%}<div class="form-result mt-2"></div>{%- endmacro %}

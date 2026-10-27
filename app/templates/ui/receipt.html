@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Check a receipt{% endblock %}
+{% block content %}
+<div class="row justify-content-center"><div class="col-lg-8">
+<div class="card p-4">
+  <h1 class="h4">Check a voting receipt (R6)</h1>
+  <p>Paste the receipt you saved after voting. This proves your sealed ballot reached the ballot box. It does not show,
+    and cannot show, how you voted.</p>
+  <form data-api="/ballot/{election_id}/receipt/check" data-ok="Receipt checked.">
+    <div class="mb-3"><label class="form-label" for="election_id">Election</label>
+      <select class="form-select" id="election_id" name="election_id" required>
+        {% for e in elections %}<option value="{{ e.id }}">{{ e.name }} - {{ e.division }}</option>{% endfor %}
+      </select></div>
+    <div class="mb-3"><label class="form-label" for="ballot_hash">Ballot hash</label>
+      <input class="form-control mono" id="ballot_hash" name="ballot_hash" pattern="[0-9a-f]{64}" required></div>
+    <div class="mb-3"><label class="form-label" for="signature">Signature</label>
+      <input class="form-control mono" id="signature" name="signature" required></div>
+    <div class="mb-3"><label class="form-label" for="paste">Or paste the whole receipt file here</label>
+      <textarea class="form-control mono" id="paste" rows="3" data-skip></textarea></div>
+    <button class="btn btn-primary" type="submit">Check</button>
+    <div class="form-result mt-3"></div>
+  </form>
+</div></div></div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/receipt.js') }}"></script>{% endblock %}

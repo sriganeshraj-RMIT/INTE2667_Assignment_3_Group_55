@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "ui/_macros.html" import status_badge %}
+{% block title %}{{ election.name }}{% endblock %}
+{% block content %}
+<h1 class="h4">{{ election.name }} - {{ election.division }}, {{ election.state }} {{ status_badge(election.status) }}</h1>
+<p class="text-muted">Polls open {{ election.opens_at }} and close {{ election.closes_at }} (UTC).</p>
+
+<div class="row g-3">
+  <div class="col-lg-6"><div class="card p-3 h-100">
+    <h2 class="h5">Signed ballot (R10)</h2>
+    {% if definition.locked %}
+      {% if definition.valid %}
+        <div class="alert alert-success py-2">The candidate list, party order and polling times match their signature.</div>
+      {% else %}
+        <div class="alert alert-danger py-2">WARNING: the stored ballot does not match its signature. Voting is stopped.</div>
+      {% endif %}
+      <ol class="mb-2">{% for c in definition.definition.candidates %}<li>{{ c.name }} <span class="text-muted">({{ c.party }})</span></li>{% endfor %}</ol>
+      <p class="small mb-0">Fingerprint (SHA-256): <span class="mono">{{ definition.definition_fp }}</span></p>
+    {% else %}
+      <div class="alert alert-secondary py-2">Not locked yet. The candidates below can still change.</div>
+      <ol class="mb-0">{% for c in candidates %}<li>{{ c.name }} <span class="text-muted">({{ c.party }})</span></li>{% endfor %}</ol>
+    {% endif %}
+  </div></div>
+
+  <div class="col-lg-6"><div class="card p-3 h-100">
+    <h2 class="h5">Results (R7, R13)</h2>
+    {% if result %}
+      <div class="alert {{ 'alert-success' if result.signature_valid else 'alert-danger' }} py-2">
+        {{ 'Signature valid: this is exactly the result the counting service signed.' if result.signature_valid else 'WARNING: the published result does not match its signature.' }}</div>
+      {% set r = result.result %}
+      <p class="mb-1">Winner: <strong>{{ r.candidate_names.get(r.winner, 'no winner') if r.winner else 'no winner' }}</strong></p>
+      <p class="small mb-2">{{ r.ballots_counted }} formal ballots, {{ r.ballots_informal }} informal. Counted twice by two independent programs; both agreed.</p>
+      {% for round in r.rounds %}
+        <div class="small"><strong>Round {{ loop.index }}:</strong>
+          {% for cid, n in round.tallies.items() %}{{ r.candidate_names.get(cid, cid) }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}
+          {% if round.eliminated %} - {{ r.candidate_names.get(round.eliminated, round.eliminated) }} eliminated{% endif %}</div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted mb-0">No result has been published yet.</p>
+    {% endif %}
+  </div></div>
+
+  <div class="col-12"><div class="card p-3">
+    <h2 class="h5">Ballot box (R20)</h2>
+    {% if head %}
+      <p class="mb-1">{{ head.length }} sealed ballots are chained together. Signed head of the chain:</p>
+      <p class="mono small mb-0">{{ head.head }}</p>
+    {% else %}
+      <p class="text-muted mb-0">No ballots have been written to the box yet.</p>
+    {% endif %}
+  </div></div>
+</div>
+{% endblock %}

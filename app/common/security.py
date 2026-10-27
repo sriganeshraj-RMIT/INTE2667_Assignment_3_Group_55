@@ -57,10 +57,10 @@ def csrf_token():
 
 
 def _csp(nonce):
-    return ("default-src 'self'; "
-            f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
-            "style-src 'self' https://cdn.jsdelivr.net; "
-            "img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; "
+    return ("default-src 'self'; "                       # the GUI serves Bootstrap and its scripts itself (/static)
+            f"script-src 'self' 'nonce-{nonce}'; "
+            "style-src 'self'; "
+            "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
             "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
 
 

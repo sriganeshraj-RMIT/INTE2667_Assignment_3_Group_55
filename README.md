@@ -228,9 +228,9 @@ Seed accounts in `01_identity.sql` (`voter@evp.test`, `officer@evp.test`, and so
 | Set | Owner | Issues (in order) |
 |---|---|---|
 | A - Foundation | Jaswanth | R18 → R12 → R8 → R17 → R10 |
-| B - Enrolment and identity | Akash | R2 → R9 → R15 → R3 → R1 |
-| C - Ballot protection | Srikanth | R5 → R4 → R20 → R6 → R11 |
-| D - Staff controls and results | Sriganesh | R14 → R19 → R7 → R13 → R16 |
+| B - Enrolment and identity | Akash | R2 → R9 → R15 → R1 |
+| C - Ballot protection | Srikanth | R4 → R20 → R6 → R11 |
+| D - Staff controls and results | Sriganesh | R14 → R19 → R7 → R13 → R16 → R5 → R3 |
 
 You don't need to wait for Set A. Use the stubs, and your code will pick up the real versions when they are merged.
 

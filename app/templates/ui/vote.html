@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Vote - {{ election.name }}{% endblock %}
+{% block content %}
+<h1 class="h4">{{ election.name }} - {{ election.division }}</h1>
+{% if voted %}
+  <div class="alert alert-info">You have already voted in this election. Each voter can vote once, on any channel (R3).
+    <a href="/receipt">Check your receipt</a>.</div>
+{% elif election.status != 'OPEN' %}
+  <div class="alert alert-warning">Voting is not open for this election (status {{ election.status }}).</div>
+{% elif not definition.valid %}
+  <div class="alert alert-danger">This ballot does not match its signed version, so voting is stopped (R10).</div>
+{% else %}
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card p-4" id="ballot" data-election="{{ election.id }}">
+    <h2 class="h5">Your ballot</h2>
+    <p class="small">Number <strong>every</strong> box from 1 to {{ definition.definition.candidates | length }} in the
+      order of your choice (1 = first choice). The ballot is checked here and again on the server.</p>
+    <form id="ballot-form" novalidate>
+      {% for c in definition.definition.candidates %}
+      <div class="d-flex align-items-center mb-2">
+        <input class="form-control pref-input me-3" type="number" min="1" max="{{ definition.definition.candidates | length }}"
+               data-candidate="{{ c.id }}" aria-label="Preference for {{ c.name }}" required>
+        <div><strong>{{ c.name }}</strong> <span class="text-muted">{{ c.party }}</span></div>
+      </div>
+      {% endfor %}
+      <div id="ballot-error" class="alert alert-danger hidden mt-2"></div>
+      <button class="btn btn-primary mt-2" type="submit" id="cast-btn">Seal and cast my vote</button>
+    </form>
+    <p class="small text-muted mt-3 mb-0">Signed ballot fingerprint: <span class="mono">{{ definition.definition_fp }}</span></p>
+  </div></div>
+  <div class="col-lg-5"><div class="card p-4">
+    <h2 class="h5">What happens when you vote</h2>
+    <ol class="small mb-2" id="steps">
+      <li data-step="seal">Your ballot is sealed on this device with the election's public key (R5).</li>
+      <li data-step="pass">A blinded voting pass is signed for you; you are marked as voted (R1, R3).</li>
+      <li data-step="cast">The sealed ballot is sent with the pass, without your sign-in, so it cannot be linked to you (R1, R4).</li>
+      <li data-step="receipt">You get a signed confirmation code (R6).</li>
+    </ol>
+    <div id="vote-status"></div>
+  </div></div>
+</div>
+<div class="card p-4 mt-3 hidden" id="receipt-card">
+  <h2 class="h5">Your vote was received</h2>
+  <p class="mb-1">Confirmation code</p>
+  <p class="receipt-code mono" id="receipt-code"></p>
+  <p class="small">Save your receipt. It proves your sealed ballot reached the box, but shows nothing about how you voted,
+    so it cannot be used to prove your vote to anyone.</p>
+  <a class="btn btn-outline-primary" id="receipt-download" download="evp-receipt.json" href="#">Save receipt</a>
+  <a class="btn btn-link" href="/receipt">Check it later</a>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/evp-crypto.js') }}"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/vote.js') }}"></script>
+{% endblock %}

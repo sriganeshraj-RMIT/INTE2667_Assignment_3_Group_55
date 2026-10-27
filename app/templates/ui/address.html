@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Change address{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Change my enrolled address (R2)</h1>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card p-4">
+    <h2 class="h5">1. Ask for the change</h2>
+    <p class="small">Confirm your identity document again. A letter with a code is posted to the NEW address; a notice is
+      also sent to the old one when the change is made.</p>
+    <form data-api="/enrolment/address-change" data-ok="A letter with a code has been posted to the new address.">
+      {% with p='x-' %}{% include "ui/_identity_fields.html" %}{% endwith %}
+      {% with p='x-' %}{% include "ui/_address_fields.html" %}{% endwith %}
+      <button class="btn btn-primary mt-3" type="submit">Request the change</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+  <div class="col-lg-5"><div class="card p-4">
+    <h2 class="h5">2. Enter the code from the letter</h2>
+    <form data-api="/enrolment/address-change/confirm" data-ok="Your enrolled address has been updated.">
+      <label class="form-label" for="reference">Reference</label>
+      <input class="form-control mono mb-2" id="reference" name="reference" pattern="[0-9a-f\-]{36}" required>
+      <label class="form-label" for="code">Code</label>
+      <input class="form-control mono mb-3" id="code" name="code" pattern="[A-Za-z0-9]{10}" maxlength="10" required autocomplete="off">
+      <button class="btn btn-primary" type="submit">Confirm the change</button>
+      <div class="form-result mt-3"></div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
